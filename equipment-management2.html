@@ -1,0 +1,416 @@
+import React, { useState, useEffect } from 'react';
+
+// デモ用データ（localStorage の代わりに変数を使用）
+const initialEquipment = [
+  { 
+    id: 1, 
+    name: 'ノートPC', 
+    type: '資産', 
+    status: '使用中',
+    user: '鈴木一郎',
+    inventoryHistory: [
+      { date: '2025-01-15', inspector: '山田太郎', notes: '異常なし' },
+      { date: '2024-07-10', inspector: '佐藤花子', notes: 'キーボード清掃実施' }
+    ] 
+  },
+  { 
+    id: 2, 
+    name: 'プロジェクター', 
+    type: '資産', 
+    status: '保管',
+    user: '',
+    inventoryHistory: [
+      { date: '2025-02-20', inspector: '佐藤花子', notes: 'ランプ交換推奨' }
+    ] 
+  },
+  { 
+    id: 3, 
+    name: 'カメラ三脚', 
+    type: '借用物', 
+    status: '貸出中',
+    user: '田中誠',
+    inventoryHistory: [
+      { date: '2025-01-05', inspector: '鈴木一郎', notes: '問題なし' }
+    ] 
+  }
+];
+
+const EquipmentManagementApp = () => {
+  // ステート管理
+  const [equipment, setEquipment] = useState(initialEquipment);
+  const [newEquipment, setNewEquipment] = useState({
+    name: '',
+    type: '資産',
+    status: '保管',
+    user: '',
+    inventoryHistory: []
+  });
+  const [selectedEquipment, setSelectedEquipment] = useState(null);
+  const [inventoryData, setInventoryData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    inspector: '',
+    notes: ''
+  });
+  const [filterType, setFilterType] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterUser, setFilterUser] = useState('');
+  const [viewHistory, setViewHistory] = useState(null);
+
+  // 機材追加ハンドラー
+  const handleAddEquipment = () => {
+    if (!newEquipment.name) return;
+    
+    const newItem = {
+      ...newEquipment,
+      id: equipment.length ? Math.max(...equipment.map(item => item.id)) + 1 : 1,
+    };
+    
+    setEquipment([...equipment, newItem]);
+    setNewEquipment({
+      name: '',
+      type: '資産',
+      status: '保管',
+      user: '',
+      inventoryHistory: []
+    });
+  };
+
+  // 棚卸し記録追加ハンドラー
+  const handleAddInventoryRecord = () => {
+    if (!selectedEquipment || !inventoryData.inspector) return;
+    
+    const updatedEquipment = equipment.map(item => {
+      if (item.id === selectedEquipment.id) {
+        return {
+          ...item,
+          inventoryHistory: [
+            { 
+              date: inventoryData.date, 
+              inspector: inventoryData.inspector,
+              notes: inventoryData.notes
+            },
+            ...item.inventoryHistory
+          ]
+        };
+      }
+      return item;
+    });
+    
+    setEquipment(updatedEquipment);
+    setSelectedEquipment(null);
+    setInventoryData({
+      date: new Date().toISOString().split('T')[0],
+      inspector: '',
+      notes: ''
+    });
+  };
+
+  // 機材状態変更ハンドラー
+  const handleStatusChange = (id, newStatus) => {
+    const updatedEquipment = equipment.map(item => {
+      if (item.id === id) {
+        return { ...item, status: newStatus };
+      }
+      return item;
+    });
+    
+    setEquipment(updatedEquipment);
+  };
+
+  // 使用者変更ハンドラー
+  const handleUserChange = (id, newUser) => {
+    const updatedEquipment = equipment.map(item => {
+      if (item.id === id) {
+        return { ...item, user: newUser };
+      }
+      return item;
+    });
+    
+    setEquipment(updatedEquipment);
+  };
+
+  // フィルタリングされた機材リスト
+  const filteredEquipment = equipment.filter(item => {
+    const typeMatch = filterType === 'all' || item.type === filterType;
+    const statusMatch = filterStatus === 'all' || item.status === filterStatus;
+    const userMatch = !filterUser || (item.user && item.user.includes(filterUser));
+    return typeMatch && statusMatch && userMatch;
+  });
+
+  return (
+    <div className="mx-auto p-4 max-w-6xl">
+      <h1 className="text-2xl font-bold mb-6 text-center">機材管理システム</h1>
+      
+      {/* 新規機材追加フォーム */}
+      <div className="bg-gray-100 p-4 rounded-lg mb-6">
+        <h2 className="text-xl font-semibold mb-3">新規機材登録</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block mb-1 text-sm">機材名</label>
+            <input
+              type="text"
+              className="w-full border rounded p-2"
+              value={newEquipment.name}
+              onChange={(e) => setNewEquipment({...newEquipment, name: e.target.value})}
+            />
+          </div>
+          <div>
+            <label className="block mb-1 text-sm">種別</label>
+            <select
+              className="w-full border rounded p-2"
+              value={newEquipment.type}
+              onChange={(e) => setNewEquipment({...newEquipment, type: e.target.value})}
+            >
+              <option value="資産">資産</option>
+              <option value="借用物">借用物</option>
+            </select>
+          </div>
+          <div>
+            <label className="block mb-1 text-sm">状態</label>
+            <select
+              className="w-full border rounded p-2"
+              value={newEquipment.status}
+              onChange={(e) => setNewEquipment({...newEquipment, status: e.target.value})}
+            >
+              <option value="保管">保管</option>
+              <option value="使用中">使用中</option>
+              <option value="貸出中">貸出中</option>
+              <option value="返却済">返却済</option>
+            </select>
+          </div>
+          <div>
+            <label className="block mb-1 text-sm">使用者</label>
+            <input
+              type="text"
+              className="w-full border rounded p-2"
+              value={newEquipment.user}
+              onChange={(e) => setNewEquipment({...newEquipment, user: e.target.value})}
+            />
+          </div>
+          <div className="flex items-end">
+            <button
+              className="bg-blue-500 text-white px-4 py-2 rounded w-full"
+              onClick={handleAddEquipment}
+            >
+              登録
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      {/* フィルター */}
+      <div className="mb-6 flex flex-wrap gap-4">
+        <div>
+          <label className="mr-2">種別:</label>
+          <select
+            className="border rounded p-1"
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+          >
+            <option value="all">全て</option>
+            <option value="資産">資産</option>
+            <option value="借用物">借用物</option>
+          </select>
+        </div>
+        <div>
+          <label className="mr-2">状態:</label>
+          <select
+            className="border rounded p-1"
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+          >
+            <option value="all">全て</option>
+            <option value="保管">保管</option>
+            <option value="使用中">使用中</option>
+            <option value="貸出中">貸出中</option>
+            <option value="返却済">返却済</option>
+          </select>
+        </div>
+        <div>
+          <label className="mr-2">使用者:</label>
+          <input
+            type="text"
+            className="border rounded p-1"
+            value={filterUser}
+            onChange={(e) => setFilterUser(e.target.value)}
+            placeholder="使用者で検索"
+          />
+        </div>
+      </div>
+      
+      {/* 機材一覧 */}
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold mb-3">機材一覧</h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white border">
+            <thead>
+              <tr className="bg-gray-200">
+                <th className="border p-2">ID</th>
+                <th className="border p-2">機材名</th>
+                <th className="border p-2">種別</th>
+                <th className="border p-2">状態</th>
+                <th className="border p-2">使用者</th>
+                <th className="border p-2">最終棚卸日</th>
+                <th className="border p-2">アクション</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredEquipment.map(item => (
+                <tr key={item.id} className="hover:bg-gray-50">
+                  <td className="border p-2 text-center">{item.id}</td>
+                  <td className="border p-2">{item.name}</td>
+                  <td className="border p-2 text-center">{item.type}</td>
+                  <td className="border p-2 text-center">{item.status}</td>
+                  <td className="border p-2">
+                    <input
+                      type="text"
+                      className="w-full border rounded p-1 text-sm"
+                      value={item.user || ''}
+                      onChange={(e) => handleUserChange(item.id, e.target.value)}
+                      placeholder="使用者名"
+                    />
+                  </td>
+                  <td className="border p-2 text-center">
+                    {item.inventoryHistory.length > 0 ? item.inventoryHistory[0].date : '-'}
+                  </td>
+                  <td className="border p-2">
+                    <div className="flex gap-2 justify-center">
+                      <select
+                        className="border rounded p-1 text-sm"
+                        value={item.status}
+                        onChange={(e) => handleStatusChange(item.id, e.target.value)}
+                      >
+                        <option value="保管">保管</option>
+                        <option value="使用中">使用中</option>
+                        <option value="貸出中">貸出中</option>
+                        <option value="返却済">返却済</option>
+                      </select>
+                      <button
+                        className="bg-green-500 text-white px-2 py-1 rounded text-sm"
+                        onClick={() => setSelectedEquipment(item)}
+                      >
+                        棚卸
+                      </button>
+                      <button
+                        className="bg-blue-500 text-white px-2 py-1 rounded text-sm"
+                        onClick={() => setViewHistory(item)}
+                      >
+                        履歴
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      {/* 棚卸モーダル */}
+      {selectedEquipment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white p-6 rounded-lg max-w-md w-full">
+            <h3 className="text-lg font-semibold mb-4">
+              棚卸記録: {selectedEquipment.name}
+            </h3>
+            <div className="mb-4">
+              <label className="block mb-1">日付</label>
+              <input
+                type="date"
+                className="w-full border rounded p-2"
+                value={inventoryData.date}
+                onChange={(e) => setInventoryData({...inventoryData, date: e.target.value})}
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block mb-1">実施者</label>
+              <input
+                type="text"
+                className="w-full border rounded p-2"
+                value={inventoryData.inspector}
+                onChange={(e) => setInventoryData({...inventoryData, inspector: e.target.value})}
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block mb-1">備考</label>
+              <textarea
+                className="w-full border rounded p-2"
+                value={inventoryData.notes}
+                onChange={(e) => setInventoryData({...inventoryData, notes: e.target.value})}
+                rows="3"
+                placeholder="棚卸し時の備考"
+              ></textarea>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                className="border px-4 py-2 rounded"
+                onClick={() => setSelectedEquipment(null)}
+              >
+                キャンセル
+              </button>
+              <button
+                className="bg-blue-500 text-white px-4 py-2 rounded"
+                onClick={handleAddInventoryRecord}
+              >
+                記録
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 棚卸履歴モーダル */}
+      {viewHistory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-3xl w-full max-h-screen overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold">
+                {viewHistory.name} の棚卸履歴
+              </h3>
+              <button
+                className="text-gray-500 hover:text-gray-700"
+                onClick={() => setViewHistory(null)}
+              >
+                ✕
+              </button>
+            </div>
+            
+            {viewHistory.inventoryHistory.length > 0 ? (
+              <table className="min-w-full bg-white border">
+                <thead>
+                  <tr className="bg-gray-200">
+                    <th className="border p-2">日付</th>
+                    <th className="border p-2">実施者</th>
+                    <th className="border p-2">備考</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {viewHistory.inventoryHistory.map((record, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="border p-2">{record.date}</td>
+                      <td className="border p-2">{record.inspector}</td>
+                      <td className="border p-2">{record.notes || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-center py-4">棚卸履歴はありません</p>
+            )}
+            
+            <div className="mt-4 flex justify-end">
+              <button
+                className="bg-gray-500 text-white px-4 py-2 rounded"
+                onClick={() => setViewHistory(null)}
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default EquipmentManagementApp;
