@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>水紋シミュレーション</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #f0f9ff;
+      font-family: sans-serif;
+    }
+    
+    #canvas {
+      display: block;
+    }
+    
+    .controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background-color: rgba(255, 255, 255, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+    }
+    
+    .controls button {
+      margin: 5px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  
+  <div class="controls">
+    <button id="clearButton">クリア</button>
+    <div>
+      <label for="dampingSlider">減衰率: </label>
+      <input type="range" id="dampingSlider" min="90" max="99" value="96">
+      <span id="dampingValue">0.96</span>
+    </div>
+    <div>
+      <label for="rippleStrength">水紋の強さ: </label>
+      <input type="range" id="rippleStrength" min="100" max="1000" value="500">
+      <span id="strengthValue">500</span>
+    </div>
+    <div>
+      <label for="speedSlider">シミュレーション速度: </label>
+      <input type="range" id="speedSlider" min="1" max="5" value="1">
+      <span id="speedValue">1</span>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      const clearButton = document.getElementById('clearButton');
+      const dampingSlider = document.getElementById('dampingSlider');
+      const dampingValue = document.getElementById('dampingValue');
+      const rippleStrength = document.getElementById('rippleStrength');
+      const strengthValue = document.getElementById('strengthValue');
+      const speedSlider = document.getElementById('speedSlider');
+      const speedValue = document.getElementById('speedValue');
+      
+      let damping = 0.96;
+      let strength = 500;
+      let simSpeed = 1; // シミュレーション速度
+      
+      // 画面サイズの設定
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      
+      // バッファの作成
+      let current = [];
+      let previous = [];
+      
+      // バッファの初期化
+      function initBuffers() {
+        const size = canvas.width * canvas.height;
+        current = new Array(size).fill(0);
+        previous = new Array(size).fill(0);
+      }
+      
+      // ピクセルの位置を計算
+      function getIndex(x, y) {
+        return y * canvas.width + x;
+      }
+      
+      // 水滴を落とす
+      function dropWater(x, y, radius, strength) {
+        for (let i = -radius; i < radius; i++) {
+          for (let j = -radius; j < radius; j++) {
+            const currentX = x + i;
+            const currentY = y + j;
+            
+            if (currentX < 0 || currentX >= canvas.width || 
+                currentY < 0 || currentY >= canvas.height) {
+              continue;
+            }
+            
+            const dist = Math.sqrt(i * i + j * j);
+            if (dist < radius) {
+              const index = getIndex(currentX, currentY);
+              previous[index] = strength * (1 - dist / radius);
+            }
+          }
+        }
+      }
+      
+      // 水紋を更新
+      function updateRipples() {
+        // パフォーマンス向上のため、ピクセルを間引いて計算
+        const skip = 2; // 間引く数（1=すべて計算、2=1つおき、3=2つおき）
+        
+        for (let i = skip; i < canvas.width - skip; i += skip) {
+          for (let j = skip; j < canvas.height - skip; j += skip) {
+            const index = getIndex(i, j);
+            const top = getIndex(i, j - skip);
+            const bottom = getIndex(i, j + skip);
+            const left = getIndex(i - skip, j);
+            const right = getIndex(i + skip, j);
+            
+            // 周囲4点の平均値を計算
+            current[index] = (
+              previous[top] + 
+              previous[bottom] + 
+              previous[left] + 
+              previous[right]
+            ) / 2 - current[index];
+            
+            // 減衰を適用
+            current[index] *= damping;
+          }
+        }
+        
+        // バッファの入れ替え
+        [current, previous] = [previous, current];
+      }
+      
+      // 画面の描画
+      function render() {
+        // 描画の最適化
+        const resolution = 2; // 解像度を下げる（1=フル解像度、2=半分の解像度）
+        const width = Math.floor(canvas.width / resolution);
+        const height = Math.floor(canvas.height / resolution);
+        
+        // 小さなキャンバスに描画してからストレッチする方法
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = width;
+        tempCanvas.height = height;
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        const imageData = tempCtx.createImageData(width, height);
+        const data = imageData.data;
+        
+        for (let i = 0; i < width; i++) {
+          for (let j = 0; j < height; j++) {
+            const index = getIndex(i * resolution, j * resolution);
+            const pixelIndex = (j * width + i) * 4;
+            
+            // 水面の高さから色を計算
+            const height = previous[index];
+            
+            // 基本色（水色）
+            const baseR = 100;
+            const baseG = 150;
+            const baseB = 255;
+            
+            // 高さに応じて明るさを変える（計算を単純化）
+            const brightness = Math.max(0, Math.min(255, height * 2 + 100));
+            
+            data[pixelIndex] = Math.min(255, baseR + brightness); // R
+            data[pixelIndex + 1] = Math.min(255, baseG + brightness); // G
+            data[pixelIndex + 2] = Math.min(255, baseB); // B
+            data[pixelIndex + 3] = 255; // Alpha
+          }
+        }
+        
+        tempCtx.putImageData(imageData, 0, 0);
+        
+        // メインキャンバスに拡大描画
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+      }
+      
+      // アニメーションループ
+      function animate() {
+        // 速度に応じて複数回更新
+        for (let i = 0; i < simSpeed; i++) {
+          updateRipples();
+        }
+        render();
+        requestAnimationFrame(animate);
+      }
+      
+      // イベントリスナー
+      canvas.addEventListener('click', function(e) {
+        const x = e.clientX;
+        const y = e.clientY;
+        dropWater(x, y, 15, strength);
+      });
+      
+      canvas.addEventListener('mousemove', function(e) {
+        if (e.buttons === 1) { // マウスボタンが押されている場合
+          const x = e.clientX;
+          const y = e.clientY;
+          dropWater(x, y, 5, strength / 2);
+        }
+      });
+      
+      clearButton.addEventListener('click', function() {
+        initBuffers();
+      });
+      
+      dampingSlider.addEventListener('input', function() {
+        damping = this.value / 100;
+        dampingValue.textContent = damping.toFixed(2);
+      });
+      
+      rippleStrength.addEventListener('input', function() {
+        strength = parseInt(this.value);
+        strengthValue.textContent = strength;
+      });
+      
+      speedSlider.addEventListener('input', function() {
+        simSpeed = parseInt(this.value);
+        speedValue.textContent = simSpeed;
+      });
+      
+      // リサイズ対応
+      window.addEventListener('resize', function() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        initBuffers();
+      });
+      
+      // 初期化と開始
+      initBuffers();
+      animate();
+    });
+  </script>
+</body>
+</html>
