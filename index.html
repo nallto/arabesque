@@ -8,9 +8,9 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/material-design-icons/3.0.1/iconfont/material-icons.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/Roboto/0.2.0/roboto-fontface.css" rel="stylesheet">
     <!-- TensorFlow.js コアライブラリ -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/3.18.0/tf.min.js"></script>
-    <!-- Face Landmarks Detection ライブラリ -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@0.0.3/dist/face-landmarks-detection.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js"></script>
+    <!-- BlazeFace モデル -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
     <style>
         :root {
             --primary-color: #3f51b5;
@@ -489,17 +489,10 @@
         // モデルの読み込み
         async function loadModel() {
             try {
-                statusElement.textContent = '顔検出モデルを読み込み中...';
+                statusElement.textContent = 'BlazeFaceモデルを読み込み中...';
                 
-                // Face Landmarks Detection モデルを読み込む
-                model = await faceLandmarksDetection.load(
-                    faceLandmarksDetection.SupportedPackages.mediapipeFacemesh,
-                    {
-                        maxFaces: 1, // 検出する顔の最大数
-                        refineLandmarks: true, // 虹彩を含む詳細なランドマーク
-                        staticImageMode: false // ビデオストリーム用
-                    }
-                );
+                // BlazeFaceモデルを読み込む
+                model = await blazeface.load();
                 
                 statusElement.textContent = 'モデルの読み込みが完了しました。カメラを開始してください。';
                 startButton.disabled = false;
@@ -615,13 +608,8 @@
                 // FPS表示の更新
                 updateFps();
                 
-                // 顔のランドマーク検出を実行
-                const predictions = await model.estimateFaces({
-                    input: video,
-                    returnTensors: false,
-                    flipHorizontal: false,
-                    predictIrises: true
-                });
+                // BlazeFaceモデルを使用して顔検出を実行
+                const predictions = await model.estimateFaces(video);
                 
                 // キャンバスのクリア
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -633,27 +621,30 @@
                     // 顔検出のステータス更新
                     updateFaceDetectionStatus(face);
                     
-                    // 情報の更新
-                    const landmarkCount = face.mesh ? face.mesh.length : 0;
+                    // 情報の更新（BlazeFaceでは特徴点は限定的）
+                    const landmarkCount = face.landmarks ? face.landmarks.length : 0;
                     landmarkCountElement.textContent = landmarkCount.toString();
                     
-                    // 検出精度（全ての点の平均）
-                    const score = Math.round(face.faceInViewConfidence * 100);
+                    // 検出精度
+                    const score = Math.round(face.probability[0] * 100);
                     detectionScoreElement.textContent = score.toString();
                     
                     // 境界ボックスの描画（有効な場合）
-                    if (showBoxCheckbox.checked && face.boundingBox) {
-                        drawBoundingBox(face.boundingBox);
+                    if (showBoxCheckbox.checked) {
+                        drawBoundingBox({
+                            topLeft: face.topLeft,
+                            bottomRight: face.bottomRight
+                        });
                     }
                     
                     // 特徴点の描画（有効な場合）
-                    if (showLandmarksCheckbox.checked && face.mesh) {
-                        drawFacialLandmarks(face.mesh);
+                    if (showLandmarksCheckbox.checked && face.landmarks) {
+                        drawFacialLandmarks(face.landmarks);
                     }
                     
-                    // ワイヤーフレームの描画（有効な場合）
-                    if (showWireframeCheckbox.checked && face.mesh) {
-                        drawFacialWireframe(face);
+                    // ワイヤーフレームの描画（BlazeFaceはシンプルな特徴点のため、簡易的な輪郭を描画）
+                    if (showWireframeCheckbox.checked && face.landmarks) {
+                        drawSimpleFacialWireframe(face);
                     }
                 } else {
                     // 顔が検出されていない場合はステータスをリセット
@@ -673,15 +664,18 @@
             animationId = requestAnimationFrame(detectFaces);
         }
         
-        // 顔検出のステータス更新
+        // 顔検出のステータス更新（BlazeFace用に簡略化）
         function updateFaceDetectionStatus(face) {
             // 顔の検出状態を更新
             faceStatusElement.textContent = '検出';
             faceStatusElement.className = 'detected';
             
-            // 目の検出状態
-            const hasLeftEye = face.annotations && face.annotations.leftEyeIris;
-            const hasRightEye = face.annotations && face.annotations.rightEyeIris;
+            // BlazeFaceの特徴点のインデックス
+            // 0: 右目, 1: 左目, 2: 鼻, 3: 口, 4: 右耳, 5: 左耳
+            
+            // 目の検出状態 (インデックス0と1)
+            const hasRightEye = face.landmarks && face.landmarks[0];
+            const hasLeftEye = face.landmarks && face.landmarks[1];
             
             if (hasLeftEye && hasRightEye) {
                 eyesStatusElement.textContent = '検出 (両目)';
@@ -694,24 +688,21 @@
                 eyesStatusElement.className = 'not-detected';
             }
             
-            // 鼻の検出状態
-            const hasNose = face.annotations && face.annotations.nose && face.annotations.nose.length > 0;
+            // 鼻の検出状態 (インデックス2)
+            const hasNose = face.landmarks && face.landmarks[2];
             noseStatusElement.textContent = hasNose ? '検出' : '未検出';
             noseStatusElement.className = hasNose ? 'detected' : 'not-detected';
             
-            // 口の検出状態
-            const hasMouth = face.annotations && 
-                           ((face.annotations.lipsUpperOuter && face.annotations.lipsUpperOuter.length > 0) || 
-                            (face.annotations.lipsLowerOuter && face.annotations.lipsLowerOuter.length > 0));
+            // 口の検出状態 (インデックス3)
+            const hasMouth = face.landmarks && face.landmarks[3];
             mouthStatusElement.textContent = hasMouth ? '検出' : '未検出';
             mouthStatusElement.className = hasMouth ? 'detected' : 'not-detected';
             
-            // 耳の検出状態
-            const hasEars = face.annotations && 
-                          ((face.annotations.leftEarTragion && face.annotations.leftEarTragion.length > 0) || 
-                           (face.annotations.rightEarTragion && face.annotations.rightEarTragion.length > 0));
-            earsStatusElement.textContent = hasEars ? '検出' : '未検出';
-            earsStatusElement.className = hasEars ? 'detected' : 'not-detected';
+            // 耳の検出状態 (インデックス4と5)
+            const hasRightEar = face.landmarks && face.landmarks[4];
+            const hasLeftEar = face.landmarks && face.landmarks[5];
+            earsStatusElement.textContent = (hasRightEar || hasLeftEar) ? '検出' : '未検出';
+            earsStatusElement.className = (hasRightEar || hasLeftEar) ? 'detected' : 'not-detected';
         }
         
         // 境界ボックスの描画
