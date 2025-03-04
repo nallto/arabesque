@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>機材管理システム</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            margin-right: 5px;
+        }
+        .tab.active {
+            background-color: white;
+            border-bottom: 1px solid white;
+            margin-bottom: -1px;
+            font-weight: bold;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 8px;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: black;
+        }
+        .history-item {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px dashed #ddd;
+        }
+        .filter-section {
+            background-color: #f8f8f8;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .filter-item {
+            flex: 1;
+            min-width: 200px;
+        }
+        .notification {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            background-color: #d4edda;
+            color: #155724;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>機材管理システム</h1>
+        
+        <div class="notification" id="notification"></div>
+        
+        <div class="tabs">
+            <div class="tab active" data-tab="equipment-list">機材一覧</div>
+            <div class="tab" data-tab="add-equipment">機材登録</div>
+            <div class="tab" data-tab="inventory-history">棚卸履歴</div>
+        </div>
+        
+        <!-- 機材一覧タブ -->
+        <div class="tab-content active" id="equipment-list">
+            <div class="filter-section">
+                <h3>フィルター</h3>
+                <div class="filters">
+                    <div class="filter-item">
+                        <label for="filter-type">機材種別</label>
+                        <select id="filter-type">
+                            <option value="">すべて</option>
+                            <option value="asset">資産</option>
+                            <option value="borrowed">借用物</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label for="filter-status">機材状態</label>
+                        <select id="filter-status">
+                            <option value="">すべて</option>
+                            <option value="stored">保管</option>
+                            <option value="in-use">使用中</option>
+                            <option value="lent">貸出中</option>
+                            <option value="returned">返却済</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label for="filter-name">機材名</label>
+                        <input type="text" id="filter-name" placeholder="機材名で検索">
+                    </div>
+                </div>
+                <button id="apply-filters" style="margin-top: 10px;">フィルター適用</button>
+            </div>
+            
+            <table id="equipment-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>機材名</th>
+                        <th>種別</th>
+                        <th>状態</th>
+                        <th>最終棚卸日</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 動的に生成されるテーブル行 -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- 機材登録タブ -->
+        <div class="tab-content" id="add-equipment">
+            <h2>新規機材登録</h2>
+            <div class="form-group">
+                <label for="equipment-name">機材名 *</label>
+                <input type="text" id="equipment-name" required>
+            </div>
+            <div class="form-group">
+                <label for="equipment-type">機材種別 *</label>
+                <select id="equipment-type" required>
+                    <option value="asset">資産</option>
+                    <option value="borrowed">借用物</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="equipment-status">機材状態 *</label>
+                <select id="equipment-status" required>
+                    <option value="stored">保管</option>
+                    <option value="in-use">使用中</option>
+                    <option value="lent">貸出中</option>
+                    <option value="returned">返却済</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="equipment-description">詳細情報</label>
+                <textarea id="equipment-description" rows="4"></textarea>
+            </div>
+            <button id="save-equipment">登録</button>
+        </div>
+        
+        <!-- 棚卸履歴タブ -->
+        <div class="tab-content" id="inventory-history">
+            <h2>棚卸履歴</h2>
+            <div class="filter-section">
+                <div class="filters">
+                    <div class="filter-item">
+                        <label for="history-filter-date-from">日付から</label>
+                        <input type="date" id="history-filter-date-from">
+                    </div>
+                    <div class="filter-item">
+                        <label for="history-filter-date-to">日付まで</label>
+                        <input type="date" id="history-filter-date-to">
+                    </div>
+                    <div class="filter-item">
+                        <label for="history-filter-person">実施者</label>
+                        <input type="text" id="history-filter-person" placeholder="実施者名で検索">
+                    </div>
+                </div>
+                <button id="apply-history-filters" style="margin-top: 10px;">フィルター適用</button>
+            </div>
+            
+            <div id="inventory-history-list">
+                <!-- 動的に生成される棚卸履歴 -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- 棚卸モーダル -->
+    <div id="inventory-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>棚卸実施</h2>
+            <div class="form-group">
+                <label for="inventory-equipment-id">機材ID</label>
+                <input type="text" id="inventory-equipment-id" readonly>
+            </div>
+            <div class="form-group">
+                <label for="inventory-equipment-name">機材名</label>
+                <input type="text" id="inventory-equipment-name" readonly>
+            </div>
+            <div class="form-group">
+                <label for="inventory-date">棚卸日 *</label>
+                <input type="date" id="inventory-date" required>
+            </div>
+            <div class="form-group">
+                <label for="inventory-person">実施者 *</label>
+                <input type="text" id="inventory-person" required>
+            </div>
+            <div class="form-group">
+                <label for="inventory-status">機材状態 *</label>
+                <select id="inventory-status" required>
+                    <option value="stored">保管</option>
+                    <option value="in-use">使用中</option>
+                    <option value="lent">貸出中</option>
+                    <option value="returned">返却済</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="inventory-notes">備考</label>
+                <textarea id="inventory-notes" rows="3"></textarea>
+            </div>
+            <button id="save-inventory">登録</button>
+        </div>
+    </div>
+    
+    <!-- 詳細モーダル -->
+    <div id="details-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>機材詳細情報</h2>
+            <div id="equipment-details">
+                <!-- 動的に生成される詳細情報 -->
+            </div>
+            <h3>棚卸履歴</h3>
+            <div id="equipment-inventory-history">
+                <!-- 動的に生成される棚卸履歴 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // データストレージ（代わりにメモリ内変数を使用）
+        let equipmentList = [
+            {
+                id: "1",
+                name: "ノートPC ThinkPad X1",
+                type: "asset",
+                status: "in-use",
+                description: "開発部門用のノートPC"
+            },
+            {
+                id: "2",
+                name: "プロジェクター EPSON EB-L510U",
+                type: "asset",
+                status: "stored",
+                description: "会議室用プロジェクター"
+            },
+            {
+                id: "3",
+                name: "デジタルカメラ Sony α7 III",
+                type: "borrowed",
+                status: "lent",
+                description: "マーケティング部門から借用"
+            }
+        ];
+        
+        let inventoryHistory = [
+            {
+                id: "1",
+                equipmentId: "1",
+                date: "2025-02-20",
+                person: "山田太郎",
+                status: "in-use",
+                notes: "正常に稼働中"
+            },
+            {
+                id: "2",
+                equipmentId: "2",
+                date: "2025-02-18",
+                person: "佐藤花子",
+                status: "stored",
+                notes: "保管庫にて保管中"
+            },
+            {
+                id: "3",
+                equipmentId: "3",
+                date: "2025-02-15",
+                person: "鈴木一郎",
+                status: "lent",
+                notes: "デザイン部に貸出中"
+            }
+        ];
+        
+        // DOM要素の取得
+        const equipmentTable = document.getElementById('equipment-table').getElementsByTagName('tbody')[0];
+        const inventoryHistoryList = document.getElementById('inventory-history-list');
+        const inventoryModal = document.getElementById('inventory-modal');
+        const detailsModal = document.getElementById('details-modal');
+        const notification = document.getElementById('notification');
+        
+        // 通知表示関数
+        function showNotification(message, isSuccess = true) {
+            notification.textContent = message;
+            notification.style.display = 'block';
+            notification.style.backgroundColor = isSuccess ? '#d4edda' : '#f8d7da';
+            notification.style.color = isSuccess ? '#155724' : '#721c24';
+            
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+        
+        // タブ切り替え機能
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                tab.classList.add('active');
+                const tabId = tab.getAttribute('data-tab');
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+        
+        // モーダルを閉じる機能
+        document.querySelectorAll('.close').forEach(closeButton => {
+            closeButton.addEventListener('click', () => {
+                inventoryModal.style.display = 'none';
+                detailsModal.style.display = 'none';
+            });
+        });
+        
+        window.addEventListener('click', (event) => {
+            if (event.target === inventoryModal) {
+                inventoryModal.style.display = 'none';
+            }
+            if (event.target === detailsModal) {
+                detailsModal.style.display = 'none';
+            }
+        });
+        
+        // 機材一覧を表示する関数
+        function displayEquipmentList(list = equipmentList) {
+            equipmentTable.innerHTML = '';
+            
+            list.forEach(equipment => {
+                const row = equipmentTable.insertRow();
+                
+                // 最新の棚卸情報を取得
+                const inventoryRecords = inventoryHistory.filter(record => record.equipmentId === equipment.id);
+                const lastInventory = inventoryRecords.length > 0 ? 
+                    inventoryRecords.sort((a, b) => new Date(b.date) - new Date(a.date))[0] : null;
+                
+                row.innerHTML = `
+                    <td>${equipment.id}</td>
+                    <td>${equipment.name}</td>
+                    <td>${equipment.type === 'asset' ? '資産' : '借用物'}</td>
+                    <td>${getStatusLabel(equipment.status)}</td>
+                    <td>${lastInventory ? lastInventory.date : '-'}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button onclick="showInventoryModal('${equipment.id}')">棚卸</button>
+                            <button onclick="showDetailsModal('${equipment.id}')">詳細</button>
+                        </div>
+                    </td>
+                `;
+            });
+        }
+        
+        // 棚卸履歴を表示する関数
+        function displayInventoryHistory(history = inventoryHistory) {
+            inventoryHistoryList.innerHTML = '';
+            
+            // 日付の降順でソート
+            const sortedHistory = [...history].sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            sortedHistory.forEach(record => {
+                const equipment = equipmentList.find(e => e.id === record.equipmentId);
+                if (!equipment) return;
+                
+                const historyItem = document.createElement('div');
+                historyItem.className = 'history-item';
+                historyItem.innerHTML = `
+                    <h3>${equipment.name}（ID: ${equipment.id}）</h3>
+                    <p>棚卸日: ${record.date}</p>
+                    <p>実施者: ${record.person}</p>
+                    <p>機材状態: ${getStatusLabel(record.status)}</p>
+                    ${record.notes ? `<p>備考: ${record.notes}</p>` : ''}
+                `;
+                
+                inventoryHistoryList.appendChild(historyItem);
+            });
+        }
+        
+        // 機材状態のラベルを取得する関数
+        function getStatusLabel(status) {
+            const statusMap = {
+                'stored': '保管',
+                'in-use': '使用中',
+                'lent': '貸出中',
+                'returned': '返却済'
+            };
+            return statusMap[status] || status;
+        }
+        
+        // 棚卸モーダルを表示する関数
+        window.showInventoryModal = function(equipmentId) {
+            const equipment = equipmentList.find(e => e.id === equipmentId);
+            if (!equipment) return;
+            
+            document.getElementById('inventory-equipment-id').value = equipment.id;
+            document.getElementById('inventory-equipment-name').value = equipment.name;
+            document.getElementById('inventory-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('inventory-status').value = equipment.status;
+            document.getElementById('inventory-person').value = '';
+            document.getElementById('inventory-notes').value = '';
+            
+            inventoryModal.style.display = 'block';
+        };
+        
+        // 詳細モーダルを表示する関数
+        window.showDetailsModal = function(equipmentId) {
+            const equipment = equipmentList.find(e => e.id === equipmentId);
+            if (!equipment) return;
+            
+            const detailsDiv = document.getElementById('equipment-details');
+            const historyDiv = document.getElementById('equipment-inventory-history');
+            
+            // 機材詳細情報の表示
+            detailsDiv.innerHTML = `
+                <p><strong>ID:</strong> ${equipment.id}</p>
+                <p><strong>機材名:</strong> ${equipment.name}</p>
+                <p><strong>種別:</strong> ${equipment.type === 'asset' ? '資産' : '借用物'}</p>
+                <p><strong>状態:</strong> ${getStatusLabel(equipment.status)}</p>
+                <p><strong>詳細:</strong> ${equipment.description || '記載なし'}</p>
+            `;
+            
+            // 棚卸履歴の表示
+            historyDiv.innerHTML = '';
+            const records = inventoryHistory
+                .filter(record => record.equipmentId === equipment.id)
+                .sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            if (records.length === 0) {
+                historyDiv.innerHTML = '<p>棚卸履歴はありません。</p>';
+            } else {
+                records.forEach(record => {
+                    const historyItem = document.createElement('div');
+                    historyItem.className = 'history-item';
+                    historyItem.innerHTML = `
+                        <p><strong>棚卸日:</strong> ${record.date}</p>
+                        <p><strong>実施者:</strong> ${record.person}</p>
+                        <p><strong>機材状態:</strong> ${getStatusLabel(record.status)}</p>
+                        ${record.notes ? `<p><strong>備考:</strong> ${record.notes}</p>` : ''}
+                    `;
+                    historyDiv.appendChild(historyItem);
+                });
+            }
+            
+            detailsModal.style.display = 'block';
+        };
+        
+        // 機材保存機能
+        document.getElementById('save-equipment').addEventListener('click', () => {
+            const name = document.getElementById('equipment-name').value.trim();
+            const type = document.getElementById('equipment-type').value;
+            const status = document.getElementById('equipment-status').value;
+            const description = document.getElementById('equipment-description').value.trim();
+            
+            if (!name) {
+                alert('機材名を入力してください。');
+                return;
+            }
+            
+            const newEquipment = {
+                id: (equipmentList.length + 1).toString(),
+                name,
+                type,
+                status,
+                description
+            };
+            
+            equipmentList.push(newEquipment);
+            
+            // フォームをリセット
+            document.getElementById('equipment-name').value = '';
+            document.getElementById('equipment-description').value = '';
+            
+            showNotification('機材を登録しました。');
+            
+            // 機材一覧タブに切り替え
+            document.querySelector('[data-tab="equipment-list"]').click();
+            displayEquipmentList();
+        });
+        
+        // 棚卸保存機能
+        document.getElementById('save-inventory').addEventListener('click', () => {
+            const equipmentId = document.getElementById('inventory-equipment-id').value;
+            const date = document.getElementById('inventory-date').value;
+            const person = document.getElementById('inventory-person').value.trim();
+            const status = document.getElementById('inventory-status').value;
+            const notes = document.getElementById('inventory-notes').value.trim();
+            
+            if (!date || !person) {
+                alert('必須項目を入力してください。');
+                return;
+            }
+            
+            const newRecord = {
+                id: (inventoryHistory.length + 1).toString(),
+                equipmentId,
+                date,
+                person,
+                status,
+                notes
+            };
+            
+            inventoryHistory.push(newRecord);
+            
+            // 機材の状態を更新
+            const equipment = equipmentList.find(e => e.id === equipmentId);
+            if (equipment) {
+                equipment.status = status;
+            }
+            
+            showNotification('棚卸を登録しました。');
+            inventoryModal.style.display = 'none';
+            displayEquipmentList();
+        });
+        
+        // フィルター適用機能（機材一覧）
+        document.getElementById('apply-filters').addEventListener('click', () => {
+            const typeFilter = document.getElementById('filter-type').value;
+            const statusFilter = document.getElementById('filter-status').value;
+            const nameFilter = document.getElementById('filter-name').value.toLowerCase();
+            
+            const filteredList = equipmentList.filter(equipment => {
+                return (
+                    (typeFilter === '' || equipment.type === typeFilter) &&
+                    (statusFilter === '' || equipment.status === statusFilter) &&
+                    (nameFilter === '' || equipment.name.toLowerCase().includes(nameFilter))
+                );
+            });
+            
+            displayEquipmentList(filteredList);
+        });
+        
+        // フィルター適用機能（棚卸履歴）
+        document.getElementById('apply-history-filters').addEventListener('click', () => {
+            const dateFromFilter = document.getElementById('history-filter-date-from').value;
+            const dateToFilter = document.getElementById('history-filter-date-to').value;
+            const personFilter = document.getElementById('history-filter-person').value.toLowerCase();
+            
+            const filteredHistory = inventoryHistory.filter(record => {
+                return (
+                    (dateFromFilter === '' || record.date >= dateFromFilter) &&
+                    (dateToFilter === '' || record.date <= dateToFilter) &&
+                    (personFilter === '' || record.person.toLowerCase().includes(personFilter))
+                );
+            });
+            
+            displayInventoryHistory(filteredHistory);
+        });
+        
+        // 初期表示
+        displayEquipmentList();
+        displayInventoryHistory();
+        
+        // 今日の日付をデフォルトで設定
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('inventory-date').value = today;
+    </script>
+</body>
+</html>
