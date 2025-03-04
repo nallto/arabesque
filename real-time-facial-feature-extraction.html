@@ -1,349 +1,538 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>シンプルなカメラエフェクトアプリ</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            font-family: sans-serif;
-            background-color: #f0f0f0;
-        }
-        
-        h1 {
-            margin-bottom: 20px;
-            color: #333;
-        }
-        
-        .container {
-            position: relative;
-            margin: 0 auto;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        
-        video, canvas {
-            border-radius: 8px;
-        }
-        
-        canvas {
-            display: block;
-        }
-        
-        #status {
-            margin-top: 20px;
-            padding: 10px;
-            background-color: #4CAF50;
-            color: white;
-            border-radius: 4px;
-            text-align: center;
-            width: 100%;
-            max-width: 640px;
-        }
-        
-        .controls {
-            margin-top: 20px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            justify-content: center;
-            width: 100%;
-            max-width: 640px;
-        }
-        
-        .button {
-            padding: 10px 20px;
-            background-color: #2196F3;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        
-        .button:hover {
-            background-color: #0b7dda;
-        }
-        
-        .button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-        
-        .button.active {
-            background-color: #4CAF50;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>リアルタイム顔特徴点抽出</title>
+  <!-- TensorFlow.jsコアライブラリ -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js" onerror="handleScriptError('TensorFlow.js Core')"></script>
+  
+  <!-- TensorFlow.js Face Landmarksモデル -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@0.0.3/dist/face-landmarks-detection.min.js" onerror="handleScriptError('Face Landmarks Detection')"></script>
+  <script>
+    function handleScriptError(scriptName) {
+      document.getElementById('loading').querySelector('.loading-message').innerHTML = `
+        <div style="color: red; font-weight: bold; margin-bottom: 10px;">
+          ライブラリの読み込みに失敗しました: ${scriptName}
+        </div>
+        <div style="font-size: 14px; margin-bottom: 10px;">
+          必要なJavaScriptライブラリを読み込めませんでした。
+        </div>
+        <div style="font-size: 14px; margin-bottom: 10px;">
+          エラー詳細: 
+          <pre style="background-color: #f8f8f8; padding: 10px; border-radius: 4px; margin-top: 5px; white-space: pre-wrap; word-break: break-all; color: #d44950;">
+ReferenceError: faceLandmarksDetection is not defined
+または
+ReferenceError: tf is not defined</pre>
+        </div>
+        <div style="font-size: 14px;">
+          考えられる原因:
+          <ul style="text-align: left; margin-top: 5px;">
+            <li>インターネット接続に問題がある</li>
+            <li>CDNサービスが一時的に利用できない</li>
+            <li>コンテンツブロッカーがスクリプトを阻止している</li>
+            <li>ライブラリのバージョンに互換性がない</li>
+          </ul>
+        </div>
+        <div style="font-size: 14px; margin-top: 10px;">
+          解決方法:
+          <ul style="text-align: left; margin-top: 5px;">
+            <li>ページを再読み込みする</li>
+            <li>別のブラウザを試す</li>
+            <li>広告ブロッカーを無効にする</li>
+            <li>キャッシュをクリアする</li>
+          </ul>
+        </div>
+        <button onclick="window.location.reload()" style="margin-top: 10px; padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
+          ページを再読み込み
+        </button>
+      `;
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f8f9fa;
+      color: #333;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+    }
+    h1 {
+      grid-column: 1 / -1;
+      text-align: center;
+      color: #2c3e50;
+      margin-bottom: 30px;
+      font-weight: 300;
+      font-size: 2.5rem;
+    }
+    .video-container {
+      position: relative;
+      background-color: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      padding: 15px;
+    }
+    .info-panel {
+      background-color: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+    }
+    #video, #canvas {
+      width: 100%;
+      border-radius: 5px;
+    }
+    #canvas {
+      position: absolute;
+      left: 15px;
+      top: 15px;
+    }
+    .fps {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .control-panel {
+      display: flex;
+      justify-content: center;
+      margin: 15px 0;
+      grid-column: 1 / -1;
+    }
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      margin: 0 10px;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #2980b9;
+    }
+    .landmark-info {
+      margin-top: 10px;
+      overflow-y: auto;
+      max-height: 300px;
+      font-family: monospace;
+      font-size: 14px;
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .info-section {
+      margin-bottom: 15px;
+    }
+    .info-section h3 {
+      margin-top: 0;
+      color: #2c3e50;
+      font-weight: 500;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 5px;
+    }
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(255, 255, 255, 0.9);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      z-index: 1000;
+    }
+    .loading-message {
+      margin-top: 20px;
+      font-size: 18px;
+    }
+    .spinner {
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #3498db;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
-    <h1>カメラエフェクトアプリ</h1>
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <div class="loading-message">モデルを読み込み中...</div>
+  </div>
+
+  <div class="container">
+    <h1>リアルタイム顔特徴点抽出</h1>
     
-    <div class="container">
-        <canvas id="canvas" width="640" height="480"></canvas>
+    <div class="video-container">
+      <video id="video" playsinline autoplay></video>
+      <canvas id="canvas"></canvas>
+      <div class="fps" id="fps">FPS: 0</div>
     </div>
     
-    <div id="status">カメラへのアクセスを準備中...</div>
-    
-    <div class="controls">
-        <button id="startButton" class="button">開始</button>
-        <button id="effectNone" class="button active">通常</button>
-        <button id="effectGreyscale" class="button">グレースケール</button>
-        <button id="effectEdge" class="button">輪郭検出</button>
-        <button id="effectGrid" class="button">グリッド線</button>
-        <button id="effectFace" class="button">顔検出シミュレーション</button>
-        <button id="captureButton" class="button">写真を撮る</button>
+    <div class="info-panel">
+      <div class="info-section">
+        <h3>顔検出状態</h3>
+        <div id="face-status">検出中...</div>
+      </div>
+      
+      <div class="info-section">
+        <h3>主要特徴点</h3>
+        <div id="key-landmarks">
+          <div>目：未検出</div>
+          <div>鼻：未検出</div>
+          <div>口：未検出</div>
+          <div>顎：未検出</div>
+        </div>
+      </div>
+      
+      <div class="info-section">
+        <h3>詳細データ</h3>
+        <div class="landmark-info" id="landmark-data">データを読み込み中...</div>
+      </div>
     </div>
     
-    <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const statusText = document.getElementById('status');
-        const startButton = document.getElementById('startButton');
-        const captureButton = document.getElementById('captureButton');
-        const effectButtons = {
-            none: document.getElementById('effectNone'),
-            greyscale: document.getElementById('effectGreyscale'),
-            edge: document.getElementById('effectEdge'),
-            grid: document.getElementById('effectGrid'),
-            face: document.getElementById('effectFace')
-        };
+    <div class="control-panel">
+      <button id="start-btn">開始</button>
+      <button id="stop-btn">停止</button>
+    </div>
+  </div>
+
+  <script>
+    // DOM要素の取得
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const fpsElement = document.getElementById('fps');
+    const faceStatusElement = document.getElementById('face-status');
+    const keyLandmarksElement = document.getElementById('key-landmarks');
+    const landmarkDataElement = document.getElementById('landmark-data');
+    const startButton = document.getElementById('start-btn');
+    const stopButton = document.getElementById('stop-btn');
+    const loadingElement = document.getElementById('loading');
+
+    // 変数の初期化
+    let model;
+    let streaming = false;
+    let lastFrameTime = 0;
+    let frameCount = 0;
+    let fps = 0;
+    let animationId;
+
+    // ランドマークの色定義
+    const LANDMARK_COLORS = {
+      silhouette: '#FF3030',
+      lipsUpperOuter: '#FF8080',
+      lipsLowerOuter: '#FF8080',
+      lipsUpperInner: '#FF8080',
+      lipsLowerInner: '#FF8080',
+      rightEyeUpper0: '#30FF30',
+      rightEyeLower0: '#30FF30',
+      rightEyeUpper1: '#30FF30',
+      rightEyeLower1: '#30FF30',
+      rightEyeUpper2: '#30FF30',
+      rightEyeLower2: '#30FF30',
+      rightEyeLower3: '#30FF30',
+      rightEyebrowUpper: '#30FFFF',
+      rightEyebrowLower: '#30FFFF',
+      leftEyeUpper0: '#3030FF',
+      leftEyeLower0: '#3030FF',
+      leftEyeUpper1: '#3030FF',
+      leftEyeLower1: '#3030FF',
+      leftEyeUpper2: '#3030FF',
+      leftEyeLower2: '#3030FF',
+      leftEyeLower3: '#3030FF',
+      leftEyebrowUpper: '#FF30FF',
+      leftEyebrowLower: '#FF30FF',
+      midwayBetweenEyes: '#FFFF30',
+      noseTip: '#FF6600',
+      noseBottom: '#FF6600',
+      noseRightCorner: '#FF6600',
+      noseLeftCorner: '#FF6600',
+      rightCheek: '#FFCC00',
+      leftCheek: '#FFCC00'
+    };
+
+    // 主要ランドマークグループ
+    const KEY_LANDMARK_GROUPS = {
+      eyes: ['rightEyeUpper0', 'rightEyeLower0', 'leftEyeUpper0', 'leftEyeLower0', 'rightEyebrowUpper', 'leftEyebrowUpper'],
+      nose: ['noseTip', 'noseBottom', 'noseRightCorner', 'noseLeftCorner'],
+      mouth: ['lipsUpperOuter', 'lipsLowerOuter', 'lipsUpperInner', 'lipsLowerInner'],
+      jawline: ['silhouette']
+    };
+
+    // WebGLのサポート確認
+    function checkWebGLSupport() {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (!gl) {
+        loadingElement.querySelector('.loading-message').innerHTML = `
+          <div style="color: red; font-weight: bold; margin-bottom: 10px;">
+            WebGLがサポートされていません
+          </div>
+          <div style="font-size: 14px; margin-bottom: 10px;">
+            お使いのブラウザはWebGLをサポートしていないか、無効化されています。
+          </div>
+          <div style="font-size: 14px;">
+            解決方法:
+            <ul style="text-align: left; margin-top: 5px;">
+              <li>ブラウザの設定でWebGLを有効にする</li>
+              <li>最新のChromeやFirefoxなど、別のブラウザを試す</li>
+              <li>グラフィックドライバを更新する</li>
+            </ul>
+          </div>
+        `;
+        return false;
+      }
+      return true;
+    }
+
+    // モデルの初期化
+    async function initModel() {
+      // WebGLのサポートを確認
+      if (!checkWebGLSupport()) {
+        return;
+      }
+      try {
+        model = await faceLandmarksDetection.load(
+          faceLandmarksDetection.SupportedPackages.mediapipeFacemesh,
+          { maxFaces: 1 }
+        );
+        loadingElement.style.display = 'none';
+        console.log('モデルの読み込みが完了しました');
+      } catch (error) {
+        console.error('モデルの読み込みに失敗しました:', error);
+        loadingElement.querySelector('.loading-message').innerHTML = `
+          <div style="color: red; font-weight: bold; margin-bottom: 10px;">
+            モデルの読み込みに失敗しました
+          </div>
+          <div style="font-size: 14px; margin-bottom: 10px;">
+            エラー内容: ${error.message || '不明なエラー'}
+          </div>
+          <div style="font-size: 14px;">
+            考えられる原因:
+            <ul style="text-align: left; margin-top: 5px;">
+              <li>インターネット接続に問題がある</li>
+              <li>使用中のブラウザが対応していない</li>
+              <li>TensorFlow.jsのライブラリに問題がある</li>
+              <li>WebGLが無効化されている</li>
+            </ul>
+          </div>
+          <button onclick="window.location.reload()" style="margin-top: 10px; padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
+            ページを再読み込み
+          </button>
+        `;
+      }
+    }
+
+    // カメラの初期化
+    async function setupCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: 640, height: 480 },
+          audio: false
+        });
+        video.srcObject = stream;
         
-        let currentEffect = 'none';
-        let isRunning = false;
-        let video = document.createElement('video');
-        video.autoplay = true;
-        video.muted = true;
-        
-        // カメラのセットアップ
-        async function setupCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 640, height: 480, facingMode: 'user' }
-                });
-                video.srcObject = stream;
-                
-                return new Promise((resolve) => {
-                    video.onloadedmetadata = () => {
-                        resolve(video);
-                    };
-                });
-            } catch (error) {
-                statusText.textContent = 'カメラアクセスエラー: ' + error.message;
-                statusText.style.backgroundColor = '#f44336';
-                throw error;
-            }
-        }
-        
-        // エフェクト処理
-        function applyEffect(imageData) {
-            const data = imageData.data;
-            
-            switch (currentEffect) {
-                case 'greyscale':
-                    for (let i = 0; i < data.length; i += 4) {
-                        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                        data[i] = avg;     // R
-                        data[i + 1] = avg; // G
-                        data[i + 2] = avg; // B
-                    }
-                    break;
-                    
-                case 'edge':
-                    // シンプルな輪郭検出（差分を強調）
-                    const width = imageData.width;
-                    const tempData = new Uint8ClampedArray(data);
-                    
-                    for (let y = 1; y < imageData.height - 1; y++) {
-                        for (let x = 1; x < width - 1; x++) {
-                            const idx = (y * width + x) * 4;
-                            
-                            // 周囲のピクセルとの差を計算
-                            const diffH = Math.abs(tempData[idx] - tempData[idx + 4]) +
-                                         Math.abs(tempData[idx + 1] - tempData[idx + 5]) +
-                                         Math.abs(tempData[idx + 2] - tempData[idx + 6]);
-                                         
-                            const diffV = Math.abs(tempData[idx] - tempData[idx + width * 4]) +
-                                         Math.abs(tempData[idx + 1] - tempData[idx + width * 4 + 1]) +
-                                         Math.abs(tempData[idx + 2] - tempData[idx + width * 4 + 2]);
-                            
-                            // 差が大きい場合は輪郭として白、それ以外は黒
-                            const edge = (diffH + diffV) > 100 ? 255 : 0;
-                            
-                            data[idx] = edge;     // R
-                            data[idx + 1] = edge; // G
-                            data[idx + 2] = edge; // B
-                        }
-                    }
-                    break;
-                    
-                case 'face':
-                    // 顔検出のシミュレーション（実際の顔検出ではなく、単純な円と特徴を描画）
-                    break;
-                    
-                case 'grid':
-                    // グリッドは画像データを変更せず、後から描画します
-                    break;
-                    
-                default:
-                    // 通常表示（エフェクトなし）
-                    break;
-            }
-            
-            return imageData;
-        }
-        
-        // 描画ループ
-        function renderFrame() {
-            if (!isRunning) return;
-            
-            // カメラ映像をキャンバスに描画
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // 画像データを取得
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            
-            // エフェクトを適用
-            const processedData = applyEffect(imageData);
-            
-            // 処理した画像データを描画
-            ctx.putImageData(processedData, 0, 0);
-            
-            // 追加の描画（エフェクトごと）
-            if (currentEffect === 'grid') {
-                drawGrid();
-            } else if (currentEffect === 'face') {
-                drawFaceSimulation();
-            }
-            
-            // 次のフレームをリクエスト
-            requestAnimationFrame(renderFrame);
-        }
-        
-        // グリッド線を描画
-        function drawGrid() {
-            const gridSize = 20;
-            const width = canvas.width;
-            const height = canvas.height;
-            
-            ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
-            ctx.lineWidth = 1;
-            
-            // 縦線
-            for (let x = gridSize; x < width; x += gridSize) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, height);
-                ctx.stroke();
-            }
-            
-            // 横線
-            for (let y = gridSize; y < height; y += gridSize) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(width, y);
-                ctx.stroke();
-            }
-        }
-        
-        // 顔検出シミュレーション
-        function drawFaceSimulation() {
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2 - 50;
-            const faceRadius = 100;
-            
-            // 顔の円
-            ctx.strokeStyle = 'green';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, faceRadius, 0, 2 * Math.PI);
-            ctx.stroke();
-            
-            // 左目
-            ctx.beginPath();
-            ctx.arc(centerX - 30, centerY - 20, 10, 0, 2 * Math.PI);
-            ctx.stroke();
-            
-            // 右目
-            ctx.beginPath();
-            ctx.arc(centerX + 30, centerY - 20, 10, 0, 2 * Math.PI);
-            ctx.stroke();
-            
-            // 鼻
-            ctx.beginPath();
-            ctx.moveTo(centerX, centerY - 10);
-            ctx.lineTo(centerX - 10, centerY + 20);
-            ctx.lineTo(centerX + 10, centerY + 20);
-            ctx.closePath();
-            ctx.stroke();
-            
-            // 口
-            ctx.beginPath();
-            ctx.arc(centerX, centerY + 30, 30, 0.2 * Math.PI, 0.8 * Math.PI);
-            ctx.stroke();
-            
-            // 特徴点をシミュレート
-            ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
-            
-            // 顔の輪郭の点
-            for (let angle = 0; angle < 2 * Math.PI; angle += 0.2) {
-                const x = centerX + faceRadius * Math.cos(angle);
-                const y = centerY + faceRadius * Math.sin(angle);
-                
-                ctx.beginPath();
-                ctx.arc(x, y, 2, 0, 2 * Math.PI);
-                ctx.fill();
-            }
-            
-            // 目の周りの点
-            for (let angle = 0; angle < 2 * Math.PI; angle += 0.4) {
-                // 左目
-                let x = centerX - 30 + 10 * Math.cos(angle);
-                let y = centerY - 20 + 10 * Math.sin(angle);
-                
-                ctx.beginPath();
-                ctx.arc(x, y, 2, 0, 2 * Math.PI);
-                ctx.fill();
-                
-                // 右目
-                x = centerX + 30 + 10 * Math.cos(angle);
-                y = centerY - 20 + 10 * Math.sin(angle);
-                
-                ctx.beginPath();
-                ctx.arc(x, y, 2, 0, 2 * Math.PI);
-                ctx.fill();
-            }
-            
-            // 鼻の点
-            for (let i = 0; i < 5; i++) {
-                const t = i / 4;
-                const x = centerX - 10 + 20 * t;
-                const y = centerY + 20;
-                
+        return new Promise((resolve) => {
+          video.onloadedmetadata = () => {
+            resolve(video);
+          };
+        });
+      } catch (error) {
+        console.error('カメラのアクセスに失敗しました:', error);
+        faceStatusElement.textContent = 'カメラにアクセスできません。カメラの許可を確認してください。';
+      }
+    }
+
+    // キャンバスのリサイズ
+    function resizeCanvas() {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    }
+
+    // 顔のランドマークを検出
+    async function detectFaces() {
+      if (!model || !streaming) return;
+
+      // FPSの計算
+      const now = performance.now();
+      frameCount++;
+      
+      if (now - lastFrameTime >= 1000) {
+        fps = Math.round(frameCount * 1000 / (now - lastFrameTime));
+        frameCount = 0;
+        lastFrameTime = now;
+        fpsElement.textContent = `FPS: ${fps}`;
+      }
+
+      try {
+        const predictions = await model.estimateFaces({
+          input: video,
+          returnTensors: false,
+          flipHorizontal: false,
+          predictIrises: true
+        });
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        if (predictions.length > 0) {
+          faceStatusElement.textContent = '顔を検出しました';
+          const keyLandmarkStatus = {
+            eyes: false,
+            nose: false,
+            mouth: false,
+            jawline: false
+          };
+
+          // 最初の顔の特徴点を描画
+          const face = predictions[0];
+          const keypoints = face.annotations;
+          
+          // ランドマークデータの更新
+          let landmarkDataText = '';
+          
+          // 各ランドマークグループを処理
+          Object.entries(keypoints).forEach(([name, points]) => {
+            if (points && points.length > 0) {
+              const color = LANDMARK_COLORS[name] || '#FF0000';
+              
+              // このランドマークグループが主要グループに属しているか確認
+              Object.entries(KEY_LANDMARK_GROUPS).forEach(([groupName, landmarks]) => {
+                if (landmarks.includes(name)) {
+                  keyLandmarkStatus[groupName] = true;
+                }
+              });
+              
+              // ランドマークを描画
+              for (let i = 0; i < points.length; i++) {
+                const [x, y, z] = points[i];
                 ctx.beginPath();
                 ctx.arc(x, y, 2, 0, 2 * Math.PI);
+                ctx.fillStyle = color;
                 ctx.fill();
+              }
+              
+              // データテキストに追加
+              landmarkDataText += `${name}: ${points.length}点\n`;
+              landmarkDataText += `例: [${Math.round(points[0][0])}, ${Math.round(points[0][1])}, ${Math.round(points[0][2])}]\n`;
             }
-            
-            // 口の点
-            for (let angle = 0.2 * Math.PI; angle <= 0.8 * Math.PI; angle += 0.1) {
-                const x = centerX + 30 * Math.cos(angle);
-                const y = centerY + 30 + 30 * Math.sin(angle);
-                
-                ctx.beginPath();
-                ctx.arc(x, y, 2, 0, 2 * Math.PI);
-                ctx.fill();
-            }
+          });
+          
+          // 顔の境界ボックスを描画
+          const { topLeft, bottomRight } = face.boundingBox;
+          ctx.strokeStyle = '#00FFFF';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(
+            topLeft[0], topLeft[1],
+            bottomRight[0] - topLeft[0], bottomRight[1] - topLeft[1]
+          );
+          
+          // 主要ランドマークのステータス更新
+          keyLandmarksElement.innerHTML = `
+            <div>目：${keyLandmarkStatus.eyes ? '検出 ✓' : '未検出'}</div>
+            <div>鼻：${keyLandmarkStatus.nose ? '検出 ✓' : '未検出'}</div>
+            <div>口：${keyLandmarkStatus.mouth ? '検出 ✓' : '未検出'}</div>
+            <div>顎：${keyLandmarkStatus.jawline ? '検出 ✓' : '未検出'}</div>
+          `;
+          
+          // 詳細データの表示
+          landmarkDataElement.textContent = landmarkDataText;
+          
+        } else {
+          faceStatusElement.textContent = '顔が見つかりません';
+          keyLandmarksElement.innerHTML = `
+            <div>目：未検出</div>
+            <div>鼻：未検出</div>
+            <div>口：未検出</div>
+            <div>顎：未検出</div>
+          `;
+          landmarkDataElement.textContent = 'データなし';
         }
-        
-        // 写真撮影
-        function capturePhoto() {
-            const dataURL = canvas.toDataURL('image/png');
-            
-            // 新しいウィンドウで開く
-            const
+      } catch (error) {
+        console.error('顔の検出中にエラーが発生しました:', error);
+      }
+      
+      animationId = requestAnimationFrame(detectFaces);
+    }
+
+    // 検出の開始
+    function startDetection() {
+      if (!streaming && model) {
+        streaming = true;
+        resizeCanvas();
+        detectFaces();
+        startButton.disabled = true;
+        stopButton.disabled = false;
+      }
+    }
+
+    // 検出の停止
+    function stopDetection() {
+      streaming = false;
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+      startButton.disabled = false;
+      stopButton.disabled = true;
+    }
+
+    // イベントリスナーの設定
+    startButton.addEventListener('click', startDetection);
+    stopButton.addEventListener('click', stopDetection);
+    stopButton.disabled = true;
+
+    // 初期化
+    async function init() {
+      await initModel();
+      await setupCamera();
+      // 自動的に開始
+      startDetection();
+    }
+
+    // ライブラリが正しく読み込まれたか確認
+    window.addEventListener('load', function() {
+      if (typeof tf === 'undefined') {
+        handleScriptError('TensorFlow.js Core');
+        return;
+      }
+      
+      if (typeof faceLandmarksDetection === 'undefined') {
+        handleScriptError('Face Landmarks Detection');
+        return;
+      }
+      
+      // ライブラリのバージョン情報をコンソールに出力
+      console.log('TensorFlow.js バージョン:', tf.version);
+      console.log('Face Landmarks Detection が読み込まれました');
+      
+      // アプリケーション開始
+      init();
+    });
+  </script>
+</body>
+</html>
