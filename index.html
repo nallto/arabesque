@@ -3,369 +3,800 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>リアルタイム顔特徴点検出</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.dom.min.js"></script>
+    <title>リアルタイム顔特徴点検出 - 高度版</title>
+    <!-- マテリアルデザインのアイコンとフォント -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/material-design-icons/3.0.1/iconfont/material-icons.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/Roboto/0.2.0/roboto-fontface.css" rel="stylesheet">
+    <!-- TensorFlow.js コアライブラリ -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/3.18.0/tf.min.js"></script>
+    <!-- Face Landmarks Detection ライブラリ -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@0.0.3/dist/face-landmarks-detection.min.js"></script>
     <style>
-        body {
+        :root {
+            --primary-color: #3f51b5;
+            --primary-light: #757de8;
+            --primary-dark: #002984;
+            --accent-color: #ff4081;
+            --text-on-primary: #ffffff;
+            --text-primary: rgba(0, 0, 0, 0.87);
+            --text-secondary: rgba(0, 0, 0, 0.54);
+            --background-color: #f5f5f5;
+            --card-color: #ffffff;
+            --divider-color: rgba(0, 0, 0, 0.12);
+            --success-color: #4caf50;
+            --warning-color: #ff9800;
+            --error-color: #f44336;
+        }
+        
+        * {
             margin: 0;
-            padding: 20px;
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Roboto', 'Noto Sans JP', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+        
+        .app-container {
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
             min-height: 100vh;
         }
         
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
+        .app-bar {
+            background-color: var(--primary-color);
+            color: var(--text-on-primary);
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
         
-        .container {
+        .app-title {
+            font-size: 1.25rem;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+        
+        .main-content {
+            flex: 1;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        
+        .card {
+            background-color: var(--card-color);
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+            overflow: hidden;
+            margin-bottom: 24px;
+            width: 100%;
+        }
+        
+        .card-title {
+            padding: 16px;
+            font-size: 1.25rem;
+            font-weight: 500;
+            border-bottom: 1px solid var(--divider-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .card-content {
+            padding: 16px;
+        }
+        
+        .video-container {
             position: relative;
-            margin-bottom: 20px;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        video, canvas {
+            width: 100%;
+            max-width: 640px;
+            max-height: 480px;
+            display: block;
         }
         
         canvas {
-            border: 3px solid #333;
-            border-radius: 10px;
+            position: absolute;
+            top: 0;
+            left: 0;
         }
         
         .controls {
             display: flex;
-            gap: 10px;
-            margin-top: 10px;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 16px;
+            justify-content: center;
         }
         
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 16px;
+            height: 36px;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.0892857143em;
             border: none;
-            border-radius: 5px;
-            background-color: #4CAF50;
-            color: white;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: background-color 0.2s, box-shadow 0.2s;
         }
         
-        button:hover {
-            background-color: #45a049;
+        .btn-icon {
+            margin-right: 8px;
         }
         
-        button:disabled {
-            background-color: #cccccc;
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: var(--text-on-primary);
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--primary-light);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn-primary:disabled {
+            background-color: rgba(0, 0, 0, 0.12);
+            color: rgba(0, 0, 0, 0.38);
             cursor: not-allowed;
+            box-shadow: none;
         }
         
-        .status {
-            margin-top: 10px;
-            font-size: 16px;
-            color: #333;
+        .btn-accent {
+            background-color: var(--accent-color);
+            color: var(--text-on-primary);
+        }
+        
+        .btn-accent:hover {
+            background-color: #ff5a92;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn-accent:disabled {
+            background-color: rgba(0, 0, 0, 0.12);
+            color: rgba(0, 0, 0, 0.38);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        
+        .info-panel {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 16px;
+        }
+        
+        .info-card {
+            flex: 1;
+            min-width: 200px;
+            background-color: var(--card-color);
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 16px;
+        }
+        
+        .info-card-title {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+        
+        .status-bar {
+            display: flex;
+            align-items: center;
+            margin-top: 16px;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        .status-message {
+            flex: 1;
+        }
+        
+        .fps-counter {
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        
+        .part-detection-list {
+            list-style: none;
+            margin-top: 8px;
+        }
+        
+        .part-detection-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        
+        .part-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .part-status {
+            flex: 1;
+        }
+        
+        .detected {
+            color: var(--success-color);
+        }
+        
+        .not-detected {
+            color: var(--error-color);
+        }
+        
+        .options-container {
+            margin-top: 16px;
+        }
+        
+        .option-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .option-label {
+            flex: 1;
+            font-size: 0.875rem;
+        }
+        
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 36px;
+            height: 20px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.38);
+            transition: .4s;
+            border-radius: 10px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: var(--primary-color);
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(16px);
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 16px;
+            }
+            
+            .info-card {
+                min-width: 100%;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>リアルタイム顔特徴点検出</h1>
-    <div id="canvas-container" class="container"></div>
-    <div class="controls">
-        <button id="startButton">カメラ開始</button>
-        <button id="stopButton" disabled>停止</button>
+    <div class="app-container">
+        <header class="app-bar">
+            <i class="material-icons">face</i>
+            <h1 class="app-title">リアルタイム顔特徴点検出 - 高度版</h1>
+        </header>
+        
+        <main class="main-content">
+            <div class="card">
+                <div class="card-title">
+                    <span>カメラビュー</span>
+                    <div id="fps" class="fps-counter">0 FPS</div>
+                </div>
+                <div class="card-content">
+                    <div class="video-container">
+                        <video id="video" autoplay muted playsinline></video>
+                        <canvas id="canvas"></canvas>
+                        <div id="fps-display" class="fps-counter">0 FPS</div>
+                    </div>
+                    
+                    <div class="controls">
+                        <button id="startButton" class="btn btn-primary" disabled>
+                            <i class="material-icons btn-icon">videocam</i>
+                            カメラ開始
+                        </button>
+                        <button id="stopButton" class="btn btn-accent" disabled>
+                            <i class="material-icons btn-icon">stop</i>
+                            停止
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="info-panel">
+                <div class="info-card">
+                    <h3 class="info-card-title">顔パーツ検出状況</h3>
+                    <ul class="part-detection-list" id="parts-list">
+                        <li class="part-detection-item">
+                            <div class="part-icon"><i class="material-icons">face</i></div>
+                            <div class="part-status">顔: <span id="face-status" class="not-detected">未検出</span></div>
+                        </li>
+                        <li class="part-detection-item">
+                            <div class="part-icon"><i class="material-icons">remove_red_eye</i></div>
+                            <div class="part-status">目: <span id="eyes-status" class="not-detected">未検出</span></div>
+                        </li>
+                        <li class="part-detection-item">
+                            <div class="part-icon">👃</div>
+                            <div class="part-status">鼻: <span id="nose-status" class="not-detected">未検出</span></div>
+                        </li>
+                        <li class="part-detection-item">
+                            <div class="part-icon">👄</div>
+                            <div class="part-status">口: <span id="mouth-status" class="not-detected">未検出</span></div>
+                        </li>
+                        <li class="part-detection-item">
+                            <div class="part-icon">👂</div>
+                            <div class="part-status">耳: <span id="ears-status" class="not-detected">未検出</span></div>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="info-card">
+                    <h3 class="info-card-title">検出情報</h3>
+                    <div id="detection-info">
+                        <p>特徴点: <span id="landmark-count">0</span> 点</p>
+                        <p>検出精度: <span id="detection-score">0</span>%</p>
+                        <p>処理時間: <span id="processing-time">0</span> ms</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">表示オプション</div>
+                <div class="card-content">
+                    <div class="options-container">
+                        <div class="option-row">
+                            <span class="option-label">顔の境界ボックスを表示</span>
+                            <label class="switch">
+                                <input type="checkbox" id="show-box" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="option-row">
+                            <span class="option-label">特徴点を表示</span>
+                            <label class="switch">
+                                <input type="checkbox" id="show-landmarks" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="option-row">
+                            <span class="option-label">輪郭線を表示</span>
+                            <label class="switch">
+                                <input type="checkbox" id="show-wireframe" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="status-bar">
+                <div id="status" class="status-message">モデルを読み込み中...</div>
+            </div>
+        </main>
     </div>
-    <div id="status" class="status">準備完了</div>
     
     <script>
-        let capture;
-        let canvas;
-        let isRunning = false;
-        let facePoints = [];
-        const numPoints = 68; // 検出する特徴点の数
+        // DOM要素
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const statusElement = document.getElementById('status');
+        const fpsDisplay = document.getElementById('fps-display');
+        const landmarkCountElement = document.getElementById('landmark-count');
+        const detectionScoreElement = document.getElementById('detection-score');
+        const processingTimeElement = document.getElementById('processing-time');
         
-        // p5.jsのセットアップ
-        function setup() {
-            // キャンバスの作成
-            canvas = createCanvas(640, 480);
-            canvas.parent('canvas-container');
+        // パーツ検出ステータス要素
+        const faceStatusElement = document.getElementById('face-status');
+        const eyesStatusElement = document.getElementById('eyes-status');
+        const noseStatusElement = document.getElementById('nose-status');
+        const mouthStatusElement = document.getElementById('mouth-status');
+        const earsStatusElement = document.getElementById('ears-status');
+        
+        // 表示オプション
+        const showBoxCheckbox = document.getElementById('show-box');
+        const showLandmarksCheckbox = document.getElementById('show-landmarks');
+        const showWireframeCheckbox = document.getElementById('show-wireframe');
+        
+        // 変数
+        let isRunning = false;
+        let stream = null;
+        let model = null;
+        let animationId = null;
+        let lastFrameTime = 0;
+        let frameCount = 0;
+        let lastFpsUpdateTime = 0;
+        let currentFps = 0;
+        
+        // FPS計算用の変数
+        function updateFps() {
+            const now = performance.now();
+            frameCount++;
             
-            // ボタンのイベントリスナー設定
-            document.getElementById('startButton').addEventListener('click', startCamera);
-            document.getElementById('stopButton').addEventListener('click', stopCamera);
-            
-            // 初期状態ではカメラは停止
-            noLoop();
+            // 500ミリ秒ごとにFPSを更新
+            if (now - lastFpsUpdateTime >= 500) {
+                currentFps = Math.round((frameCount * 1000) / (now - lastFpsUpdateTime));
+                fpsDisplay.textContent = `${currentFps} FPS`;
+                lastFpsUpdateTime = now;
+                frameCount = 0;
+            }
+        }
+        
+        // モデルの読み込み
+        async function loadModel() {
+            try {
+                statusElement.textContent = '顔検出モデルを読み込み中...';
+                
+                // Face Landmarks Detection モデルを読み込む
+                model = await faceLandmarksDetection.load(
+                    faceLandmarksDetection.SupportedPackages.mediapipeFacemesh,
+                    {
+                        maxFaces: 1, // 検出する顔の最大数
+                        refineLandmarks: true, // 虹彩を含む詳細なランドマーク
+                        staticImageMode: false // ビデオストリーム用
+                    }
+                );
+                
+                statusElement.textContent = 'モデルの読み込みが完了しました。カメラを開始してください。';
+                startButton.disabled = false;
+            } catch (error) {
+                statusElement.textContent = `エラー: モデルの読み込みに失敗しました - ${error.message}`;
+                console.error('モデルの読み込みに失敗:', error);
+            }
         }
         
         // カメラの開始
-        function startCamera() {
-            if (!isRunning) {
-                // カメラのセットアップ
-                capture = createCapture(VIDEO);
-                capture.size(width, height);
-                capture.hide(); // プレビューを非表示
+        async function startCamera() {
+            if (isRunning) return;
+            
+            try {
+                // カメラへのアクセス
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'user',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                });
                 
-                // ステータス更新
-                document.getElementById('status').textContent = 'カメラ起動中...';
+                video.srcObject = stream;
                 
-                // 特徴点の初期化（デモ用にランダムな位置）
-                initializeDemoPoints();
+                // ビデオの準備ができるのを待つ
+                await new Promise(resolve => {
+                    video.onloadedmetadata = () => {
+                        resolve();
+                    };
+                });
+                
+                // ビデオ再生開始
+                await video.play();
+                
+                // キャンバスのサイズをビデオに合わせる
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
                 
                 // 検出開始
                 isRunning = true;
-                loop();
+                lastFrameTime = performance.now();
+                lastFpsUpdateTime = performance.now();
+                frameCount = 0;
+                detectFaces();
                 
                 // ボタンの状態更新
-                document.getElementById('startButton').disabled = true;
-                document.getElementById('stopButton').disabled = false;
-                document.getElementById('status').textContent = '顔特徴点検出実行中（デモモード）';
+                startButton.disabled = true;
+                stopButton.disabled = false;
+                statusElement.textContent = '顔特徴点検出実行中...';
+            } catch (error) {
+                statusElement.textContent = `エラー: カメラへのアクセスに失敗しました - ${error.message}`;
+                console.error('カメラへのアクセスに失敗:', error);
             }
         }
         
         // カメラの停止
         function stopCamera() {
-            if (isRunning) {
-                // カメラの停止
-                if (capture) {
-                    capture.remove();
-                    capture = null;
-                }
+            if (!isRunning) return;
+            
+            // ストリームの停止
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                stream = null;
+            }
+            
+            // 検出処理の停止
+            isRunning = false;
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            
+            // キャンバスのクリア
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // ステータスのリセット
+            resetDetectionStatus();
+            
+            // ボタンの状態更新
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            statusElement.textContent = '停止しました';
+        }
+        
+        // 検出ステータスのリセット
+        function resetDetectionStatus() {
+            faceStatusElement.textContent = '未検出';
+            faceStatusElement.className = 'not-detected';
+            eyesStatusElement.textContent = '未検出';
+            eyesStatusElement.className = 'not-detected';
+            noseStatusElement.textContent = '未検出';
+            noseStatusElement.className = 'not-detected';
+            mouthStatusElement.textContent = '未検出';
+            mouthStatusElement.className = 'not-detected';
+            earsStatusElement.textContent = '未検出';
+            earsStatusElement.className = 'not-detected';
+            
+            landmarkCountElement.textContent = '0';
+            detectionScoreElement.textContent = '0';
+            processingTimeElement.textContent = '0';
+            fpsDisplay.textContent = '0 FPS';
+        }
+        
+        // 顔の検出と特徴点の描画
+        async function detectFaces() {
+            if (!isRunning) return;
+            
+            const startTime = performance.now();
+            
+            try {
+                // FPS表示の更新
+                updateFps();
                 
-                // 検出停止
-                isRunning = false;
-                noLoop();
+                // 顔のランドマーク検出を実行
+                const predictions = await model.estimateFaces({
+                    input: video,
+                    returnTensors: false,
+                    flipHorizontal: false,
+                    predictIrises: true
+                });
                 
                 // キャンバスのクリア
-                clear();
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // ボタンの状態更新
-                document.getElementById('startButton').disabled = false;
-                document.getElementById('stopButton').disabled = true;
-                document.getElementById('status').textContent = '停止しました';
-            }
-        }
-        
-        // デモ用の特徴点の初期化（顔の形に似せたランダムな位置）
-        function initializeDemoPoints() {
-            facePoints = [];
-            
-            // 顔の輪郭（17点）
-            for (let i = 0; i < 17; i++) {
-                const angle = map(i, 0, 16, PI, 0);
-                const x = width / 2 + cos(angle) * 180;
-                const y = height / 2 + sin(angle) * 200;
-                facePoints.push(createVector(x, y));
-            }
-            
-            // 左眉（5点）
-            for (let i = 0; i < 5; i++) {
-                const x = width / 2 - 80 + i * 25;
-                const y = height / 2 - 80;
-                facePoints.push(createVector(x, y));
-            }
-            
-            // 右眉（5点）
-            for (let i = 0; i < 5; i++) {
-                const x = width / 2 + 80 - i * 25;
-                const y = height / 2 - 80;
-                facePoints.push(createVector(x, y));
-            }
-            
-            // 鼻筋（4点）
-            for (let i = 0; i < 4; i++) {
-                const x = width / 2;
-                const y = height / 2 - 50 + i * 25;
-                facePoints.push(createVector(x, y));
-            }
-            
-            // 鼻下部（5点）
-            for (let i = 0; i < 5; i++) {
-                const x = width / 2 - 20 + i * 10;
-                const y = height / 2 + 25;
-                facePoints.push(createVector(x, y));
-            }
-            
-            // 左目（6点）
-            for (let i = 0; i < 6; i++) {
-                const angle = map(i, 0, 6, 0, TWO_PI);
-                const x = width / 2 - 60 + cos(angle) * 25;
-                const y = height / 2 - 50 + sin(angle) * 15;
-                facePoints.push(createVector(x, y));
-            }
-            
-            // 右目（6点）
-            for (let i = 0; i < 6; i++) {
-                const angle = map(i, 0, 6, 0, TWO_PI);
-                const x = width / 2 + 60 + cos(angle) * 25;
-                const y = height / 2 - 50 + sin(angle) * 15;
-                facePoints.push(createVector(x, y));
-            }
-            
-            // 外唇（12点）
-            for (let i = 0; i < 12; i++) {
-                const angle = map(i, 0, 12, 0, TWO_PI);
-                const x = width / 2 + cos(angle) * 50;
-                const y = height / 2 + 70 + sin(angle) * 30;
-                facePoints.push(createVector(x, y));
-            }
-            
-            // 内唇（8点）
-            for (let i = 0; i < 8; i++) {
-                const angle = map(i, 0, 8, 0, TWO_PI);
-                const x = width / 2 + cos(angle) * 30;
-                const y = height / 2 + 70 + sin(angle) * 15;
-                facePoints.push(createVector(x, y));
-            }
-        }
-        
-        // アニメーションのための特徴点更新
-        function updateDemoPoints() {
-            // 顔の中心点
-            const centerX = width / 2;
-            const centerY = height / 2;
-            
-            // カメラの画像から動きを検出（簡易的なモーション検出）
-            let avgBrightness = 0;
-            if (capture) {
-                capture.loadPixels();
-                if (capture.pixels.length > 0) {
-                    const sample = 10; // サンプリングレート
-                    for (let y = 0; y < height; y += sample) {
-                        for (let x = 0; x < width; x += sample) {
-                            const i = (y * width + x) * 4;
-                            avgBrightness += (capture.pixels[i] + capture.pixels[i+1] + capture.pixels[i+2]) / 3;
-                        }
+                // 検出された顔がある場合は描画
+                if (predictions && predictions.length > 0) {
+                    const face = predictions[0]; // 現在は1つの顔のみをサポート
+                    
+                    // 顔検出のステータス更新
+                    updateFaceDetectionStatus(face);
+                    
+                    // 情報の更新
+                    const landmarkCount = face.mesh ? face.mesh.length : 0;
+                    landmarkCountElement.textContent = landmarkCount.toString();
+                    
+                    // 検出精度（全ての点の平均）
+                    const score = Math.round(face.faceInViewConfidence * 100);
+                    detectionScoreElement.textContent = score.toString();
+                    
+                    // 境界ボックスの描画（有効な場合）
+                    if (showBoxCheckbox.checked && face.boundingBox) {
+                        drawBoundingBox(face.boundingBox);
                     }
-                    avgBrightness /= (width * height / (sample * sample));
+                    
+                    // 特徴点の描画（有効な場合）
+                    if (showLandmarksCheckbox.checked && face.mesh) {
+                        drawFacialLandmarks(face.mesh);
+                    }
+                    
+                    // ワイヤーフレームの描画（有効な場合）
+                    if (showWireframeCheckbox.checked && face.mesh) {
+                        drawFacialWireframe(face);
+                    }
+                } else {
+                    // 顔が検出されていない場合はステータスをリセット
+                    resetDetectionStatus();
                 }
+                
+                // 処理時間の更新
+                const processingTime = Math.round(performance.now() - startTime);
+                processingTimeElement.textContent = processingTime.toString();
+                
+            } catch (error) {
+                console.error('顔検出エラー:', error);
+                statusElement.textContent = `検出エラー: ${error.message}`;
             }
             
-            // 動きに応じて特徴点を少しランダムに動かす
-            const moveScale = map(noise(frameCount * 0.01), 0, 1, 0.5, 2);
-            for (let i = 0; i < facePoints.length; i++) {
-                const point = facePoints[i];
-                const angle = noise(i, frameCount * 0.01) * TWO_PI;
-                const dist = noise(i + 100, frameCount * 0.01) * 3 * moveScale;
-                
-                // 元の位置からランダムに動かす
-                point.x += cos(angle) * dist;
-                point.y += sin(angle) * dist;
-                
-                // 元の顔の形状に徐々に戻す
-                const origX = facePoints[i].x;
-                const origY = facePoints[i].y;
-                point.x = lerp(point.x, origX, 0.1);
-                point.y = lerp(point.y, origY, 0.1);
+            // 次のフレームを処理
+            animationId = requestAnimationFrame(detectFaces);
+        }
+        
+        // 顔検出のステータス更新
+        function updateFaceDetectionStatus(face) {
+            // 顔の検出状態を更新
+            faceStatusElement.textContent = '検出';
+            faceStatusElement.className = 'detected';
+            
+            // 目の検出状態
+            const hasLeftEye = face.annotations && face.annotations.leftEyeIris;
+            const hasRightEye = face.annotations && face.annotations.rightEyeIris;
+            
+            if (hasLeftEye && hasRightEye) {
+                eyesStatusElement.textContent = '検出 (両目)';
+                eyesStatusElement.className = 'detected';
+            } else if (hasLeftEye || hasRightEye) {
+                eyesStatusElement.textContent = '検出 (片目)';
+                eyesStatusElement.className = 'detected';
+            } else {
+                eyesStatusElement.textContent = '未検出';
+                eyesStatusElement.className = 'not-detected';
+            }
+            
+            // 鼻の検出状態
+            const hasNose = face.annotations && face.annotations.nose && face.annotations.nose.length > 0;
+            noseStatusElement.textContent = hasNose ? '検出' : '未検出';
+            noseStatusElement.className = hasNose ? 'detected' : 'not-detected';
+            
+            // 口の検出状態
+            const hasMouth = face.annotations && 
+                           ((face.annotations.lipsUpperOuter && face.annotations.lipsUpperOuter.length > 0) || 
+                            (face.annotations.lipsLowerOuter && face.annotations.lipsLowerOuter.length > 0));
+            mouthStatusElement.textContent = hasMouth ? '検出' : '未検出';
+            mouthStatusElement.className = hasMouth ? 'detected' : 'not-detected';
+            
+            // 耳の検出状態
+            const hasEars = face.annotations && 
+                          ((face.annotations.leftEarTragion && face.annotations.leftEarTragion.length > 0) || 
+                           (face.annotations.rightEarTragion && face.annotations.rightEarTragion.length > 0));
+            earsStatusElement.textContent = hasEars ? '検出' : '未検出';
+            earsStatusElement.className = hasEars ? 'detected' : 'not-detected';
+        }
+        
+        // 境界ボックスの描画
+        function drawBoundingBox(boundingBox) {
+            ctx.strokeStyle = '#4CAF50';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(
+                boundingBox.topLeft[0],
+                boundingBox.topLeft[1],
+                boundingBox.bottomRight[0] - boundingBox.topLeft[0],
+                boundingBox.bottomRight[1] - boundingBox.topLeft[1]
+            );
+        }
+        
+        // 特徴点の描画
+        function drawFacialLandmarks(mesh) {
+            ctx.fillStyle = '#FF5722';
+            
+            for (let i = 0; i < mesh.length; i++) {
+                const [x, y] = mesh[i];
+                ctx.beginPath();
+                ctx.arc(x, y, 1, 0, 2 * Math.PI);
+                ctx.fill();
             }
         }
         
-        // 描画処理
-        function draw() {
-            background(240);
-            
-            if (isRunning && capture) {
-                // カメラの映像を描画
-                push();
-                translate(width, 0);
-                scale(-1, 1); // 鏡像反転
-                image(capture, 0, 0, width, height);
-                pop();
-                
-                // デモ用の特徴点を更新
-                updateDemoPoints();
-                
-                // 特徴点の描画
-                drawFacialFeatures();
-            }
-        }
-        
-        // 顔の特徴点とその接続線を描画
-        function drawFacialFeatures() {
-            if (facePoints.length === 0) return;
+        // 顔のワイヤーフレーム（輪郭線）の描画
+        function drawFacialWireframe(face) {
+            ctx.strokeStyle = '#2196F3';
+            ctx.lineWidth = 1;
             
             // 顔の輪郭
-            stroke(51, 153, 255);
-            strokeWeight(2);
-            noFill();
-            beginShape();
-            for (let i = 0; i < 17; i++) {
-                const point = facePoints[i];
-                vertex(point.x, point.y);
-            }
-            endShape();
+            drawConnectors(ctx, face.annotations.silhouette);
             
             // 左眉
-            beginShape();
-            for (let i = 17; i < 22; i++) {
-                const point = facePoints[i];
-                vertex(point.x, point.y);
-            }
-            endShape();
+            drawConnectors(ctx, face.annotations.leftEyebrowUpper);
+            drawConnectors(ctx, face.annotations.leftEyebrowLower);
             
             // 右眉
-            beginShape();
-            for (let i = 22; i < 27; i++) {
-                const point = facePoints[i];
-                vertex(point.x, point.y);
-            }
-            endShape();
+            drawConnectors(ctx, face.annotations.rightEyebrowUpper);
+            drawConnectors(ctx, face.annotations.rightEyebrowLower);
             
-            // 鼻筋
-            beginShape();
-            for (let i = 27; i < 31; i++) {
-                const point = facePoints[i];
-                vertex(point.x, point.y);
-            }
-            endShape();
-            
-            // 鼻下部
-            beginShape();
-            for (let i = 31; i < 36; i++) {
-                const point = facePoints[i];
-                vertex(point.x, point.y);
-            }
-            endShape();
+            // 鼻
+            drawConnectors(ctx, face.annotations.noseBridge);
+            drawConnectors(ctx, face.annotations.noseBottom);
             
             // 左目
-            beginShape();
-            for (let i = 36; i < 42; i++) {
-                const point = facePoints[i];
-                vertex(point.x, point.y);
-            }
-            endShape(CLOSE);
+            drawConnectors(ctx, face.annotations.leftEyeUpper, true);
+            drawConnectors(ctx, face.annotations.leftEyeLower, true);
             
             // 右目
-            beginShape();
-            for (let i = 42; i < 48; i++) {
-                const point = facePoints[i];
-                vertex(point.x, point.y);
-            }
-            endShape(CLOSE);
+            drawConnectors(ctx, face.annotations.rightEyeUpper, true);
+            drawConnectors(ctx, face.annotations.rightEyeLower, true);
             
-            // 外唇
-            beginShape();
-            for (let i = 48; i < 60; i++) {
-                const point = facePoints[i];
-                vertex(point.x, point.y);
+            // 左目の虹彩
+            if (face.annotations.leftEyeIris) {
+                drawIris(ctx, face.annotations.leftEyeIris);
             }
-            endShape(CLOSE);
             
-            // 内唇
-            beginShape();
-            for (let i = 60; i < 68; i++) {
-                const point = facePoints[i];
-                vertex(point.x, point.y);
+            // 右目の虹彩
+            if (face.annotations.rightEyeIris) {
+                drawIris(ctx, face.annotations.rightEyeIris);
             }
-            endShape(CLOSE);
             
-            // すべての特徴点を描画
-            fill(255, 0, 0);
-            noStroke();
-            for (let i = 0; i < facePoints.length; i++) {
-                const point = facePoints[i];
-                ellipse(point.x, point.y, 4, 4);
-            }
+            // 唇の外側
+            drawConnectors(ctx, face.annotations.lipsUpperOuter, true);
+            drawConnectors(ctx, face.annotations.lipsLowerOuter, true);
+            
+            // 唇の内側
+            drawConnectors(ctx, face.annotations.lipsUpperInner, true);
+            drawConnectors(ctx, face.annotations.lipsLowerInner, true);
         }
-    </script>
-</body>
-</html>
+        
+        // 輪郭線の描画ヘルパー
+        function drawConnectors(ctx, points, closePath = false) {
+            if (!points || points.length === 0) return;
+            
+            ctx.beginPath();
+            ctx.moveTo(points[0][0], points[0][1]);
+            
+            for (let i = 1; i < points.length; i++) {
+                const point = points[i];
+                ctx.lineTo(point[0], point[1]);
+            }
+            
+            if (closePath) {
+                ctx.closePath();
+            }
