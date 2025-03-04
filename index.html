@@ -15,194 +15,326 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: sans-serif;
             background-color: #f0f0f0;
         }
-        .container {
-            position: relative;
-            margin: 20px;
+        
+        h1 {
+            margin-bottom: 20px;
+            color: #333;
         }
-        #video {
+        
+        .video-container {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        
+        video {
             width: 640px;
             height: 480px;
+            border: 3px solid #333;
             border-radius: 10px;
-            object-fit: cover;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
-        #overlay {
+        
+        canvas {
             position: absolute;
             top: 0;
             left: 0;
-            width: 640px;
-            height: 480px;
-            z-index: 10;
         }
+        
         .controls {
-            margin-top: 20px;
             display: flex;
+            flex-direction: column;
             gap: 10px;
+            margin-top: 10px;
         }
+        
         button {
             padding: 10px 20px;
+            font-size: 16px;
             border: none;
             border-radius: 5px;
             background-color: #4CAF50;
             color: white;
-            font-size: 16px;
             cursor: pointer;
             transition: background-color 0.3s;
         }
+        
         button:hover {
             background-color: #45a049;
         }
-        #status {
+        
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        .status {
             margin-top: 10px;
-            color: #333;
             font-size: 16px;
+            color: #333;
         }
     </style>
 </head>
 <body>
     <h1>リアルタイム顔特徴点検出</h1>
-    <div class="container">
+    <div class="video-container">
         <video id="video" autoplay muted></video>
         <canvas id="overlay"></canvas>
     </div>
     <div class="controls">
-        <button id="startButton">カメラを開始</button>
+        <button id="startButton">カメラ開始</button>
         <button id="stopButton" disabled>停止</button>
     </div>
-    <div id="status">モデルを読み込んでいます...</div>
+    <div class="status" id="status">モデルを読み込み中...</div>
 
     <script>
+        // DOM要素
         const video = document.getElementById('video');
         const overlay = document.getElementById('overlay');
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
-        const statusText = document.getElementById('status');
+        const statusElement = document.getElementById('status');
         
+        // 変数
         let isRunning = false;
         let stream = null;
-
-        // キャンバスのサイズをビデオに合わせる
-        overlay.width = 640;
-        overlay.height = 480;
-
-        // FaceAPIのモデルを読み込む
-        Promise.all([
-            faceapi.nets.tinyFaceDetector.loadFromUri('https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/models'),
-            faceapi.nets.faceLandmark68Net.loadFromUri('https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/models')
-        ]).then(() => {
-            statusText.textContent = 'モデルの読み込みが完了しました。カメラを開始してください。';
-            startButton.disabled = false;
-        }).catch(err => {
-            statusText.textContent = 'モデルの読み込みに失敗しました: ' + err.message;
-        });
-
-        // カメラ開始ボタンのイベントリスナー
-        startButton.addEventListener('click', async () => {
+        
+        // 顔検出モデルの読み込み
+        async function loadModels() {
+            statusElement.textContent = 'モデルを読み込み中...';
+            try {
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri('https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/models'),
+                    faceapi.nets.faceLandmark68Net.loadFromUri('https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/models')
+                ]);
+                statusElement.textContent = 'モデルの読み込みが完了しました。カメラを開始してください。';
+                startButton.disabled = false;
+            } catch (error) {
+                statusElement.textContent = `エラー: モデルの読み込みに失敗しました - ${error.message}`;
+                console.error('モデルの読み込みに失敗:', error);
+            }
+        }
+        
+        // カメラの開始
+        async function startCamera() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: {
-                        width: 640,
-                        height: 480,
-                        facingMode: 'user'
+                        facingMode: 'user',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
                     }
                 });
                 video.srcObject = stream;
+                
+                // キャンバスの設定
+                overlay.width = video.width;
+                overlay.height = video.height;
+                
+                // 顔認識処理の開始
                 isRunning = true;
-                startDetection();
+                detectFaces();
+                
+                // ボタンの状態更新
                 startButton.disabled = true;
                 stopButton.disabled = false;
-                statusText.textContent = '顔特徴点を検出中...';
-            } catch (err) {
-                statusText.textContent = 'カメラへのアクセスに失敗しました: ' + err.message;
+                statusElement.textContent = '顔特徴点検出実行中...';
+            } catch (error) {
+                statusElement.textContent = `エラー: カメラへのアクセスに失敗しました - ${error.message}`;
+                console.error('カメラへのアクセスに失敗:', error);
             }
-        });
-
-        // 停止ボタンのイベントリスナー
-        stopButton.addEventListener('click', () => {
+        }
+        
+        // カメラの停止
+        function stopCamera() {
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
                 video.srcObject = null;
-                isRunning = false;
-                startButton.disabled = false;
-                stopButton.disabled = true;
-                statusText.textContent = '停止しました。カメラを再開するには「カメラを開始」ボタンを押してください。';
-                
-                // キャンバスをクリア
-                const ctx = overlay.getContext('2d');
-                ctx.clearRect(0, 0, overlay.width, overlay.height);
+                stream = null;
             }
-        });
-
-        // 顔検出とランドマーク描画の関数
-        async function startDetection() {
+            
+            // 顔認識処理の停止
+            isRunning = false;
+            
+            // キャンバスのクリア
+            const context = overlay.getContext('2d');
+            context.clearRect(0, 0, overlay.width, overlay.height);
+            
+            // ボタンの状態更新
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            statusElement.textContent = '停止しました。';
+        }
+        
+        // 顔認識と特徴点検出
+        async function detectFaces() {
             if (!isRunning) return;
-
-            const detections = await faceapi.detectAllFaces(
-                video, 
-                new faceapi.TinyFaceDetectorOptions()
-            ).withFaceLandmarks();
-
-            const ctx = overlay.getContext('2d');
-            ctx.clearRect(0, 0, overlay.width, overlay.height);
             
-            // すべての検出された顔に対して処理
-            detections.forEach(detection => {
-                // 顔の輪郭を描画
-                ctx.beginPath();
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
-                ctx.rect(
-                    detection.detection.box.x,
-                    detection.detection.box.y,
-                    detection.detection.box.width,
-                    detection.detection.box.height
-                );
-                ctx.stroke();
+            try {
+                // 顔検出と特徴点検出の実行
+                const detections = await faceapi.detectAllFaces(
+                    video, 
+                    new faceapi.TinyFaceDetectorOptions()
+                ).withFaceLandmarks();
                 
-                // 顔のランドマークを描画
-                const landmarks = detection.landmarks;
-                const positions = landmarks.positions;
+                // 検出結果の描画
+                const context = overlay.getContext('2d');
+                context.clearRect(0, 0, overlay.width, overlay.height);
                 
-                // 特徴点のグループを異なる色で描画
-                drawPointsGroup(ctx, positions.slice(0, 17), 'rgba(255, 0, 0, 0.8)');  // 顔の輪郭
-                drawPointsGroup(ctx, positions.slice(17, 27), 'rgba(0, 0, 255, 0.8)'); // 眉毛
-                drawPointsGroup(ctx, positions.slice(27, 36), 'rgba(255, 255, 0, 0.8)'); // 鼻
-                drawPointsGroup(ctx, positions.slice(36, 48), 'rgba(0, 255, 255, 0.8)'); // 目
-                drawPointsGroup(ctx, positions.slice(48, 68), 'rgba(255, 0, 255, 0.8)'); // 口
-            });
-            
-            // 次のフレームで検出を続ける
-            requestAnimationFrame(startDetection);
-        }
-
-        // 特徴点のグループを描画する関数
-        function drawPointsGroup(ctx, points, color) {
-            ctx.fillStyle = color;
-            
-            // 各点を描画
-            points.forEach(point => {
-                ctx.beginPath();
-                ctx.arc(point.x, point.y, 2, 0, 2 * Math.PI);
-                ctx.fill();
-            });
-            
-            // 点同士を線で接続
-            if (points.length > 1) {
-                ctx.strokeStyle = color;
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(points[0].x, points[0].y);
+                // 座標を調整（ビデオとキャンバスのサイズが異なる場合）
+                const displaySize = { width: video.width, height: video.height };
+                const resizedDetections = faceapi.resizeResults(detections, displaySize);
                 
-                for (let i = 1; i < points.length; i++) {
-                    ctx.lineTo(points[i].x, points[i].y);
-                }
-                
-                ctx.stroke();
+                // 各顔について処理
+                resizedDetections.forEach(detection => {
+                    // 顔のバウンディングボックスを描画
+                    context.strokeStyle = '#00ff00';
+                    context.lineWidth = 2;
+                    context.strokeRect(
+                        detection.detection.box.x,
+                        detection.detection.box.y,
+                        detection.detection.box.width,
+                        detection.detection.box.height
+                    );
+                    
+                    // 特徴点の描画
+                    const landmarks = detection.landmarks;
+                    const positions = landmarks.positions;
+                    
+                    // すべての特徴点
+                    context.fillStyle = '#ff0000';
+                    positions.forEach(point => {
+                        context.beginPath();
+                        context.arc(point.x, point.y, 2, 0, 2 * Math.PI);
+                        context.fill();
+                    });
+                    
+                    // 特徴点の接続（目、眉、鼻、口、顔の輪郭）
+                    drawFaceLandmarks(context, positions);
+                });
+            } catch (error) {
+                console.error('顔検出エラー:', error);
             }
+            
+            // 次のフレームを処理
+            requestAnimationFrame(detectFaces);
         }
+        
+        // 特徴点を接続する線を描画
+        function drawFaceLandmarks(context, positions) {
+            // 顔の輪郭
+            context.strokeStyle = '#3399ff';
+            context.lineWidth = 1;
+            context.beginPath();
+            for (let i = 0; i < 16; i++) {
+                if (i === 0) {
+                    context.moveTo(positions[i].x, positions[i].y);
+                } else {
+                    context.lineTo(positions[i].x, positions[i].y);
+                }
+            }
+            context.stroke();
+            
+            // 左眉
+            context.beginPath();
+            for (let i = 17; i <= 21; i++) {
+                if (i === 17) {
+                    context.moveTo(positions[i].x, positions[i].y);
+                } else {
+                    context.lineTo(positions[i].x, positions[i].y);
+                }
+            }
+            context.stroke();
+            
+            // 右眉
+            context.beginPath();
+            for (let i = 22; i <= 26; i++) {
+                if (i === 22) {
+                    context.moveTo(positions[i].x, positions[i].y);
+                } else {
+                    context.lineTo(positions[i].x, positions[i].y);
+                }
+            }
+            context.stroke();
+            
+            // 鼻
+            context.beginPath();
+            for (let i = 27; i <= 30; i++) {
+                if (i === 27) {
+                    context.moveTo(positions[i].x, positions[i].y);
+                } else {
+                    context.lineTo(positions[i].x, positions[i].y);
+                }
+            }
+            context.stroke();
+            
+            // 鼻の下部
+            context.beginPath();
+            for (let i = 31; i <= 35; i++) {
+                if (i === 31) {
+                    context.moveTo(positions[i].x, positions[i].y);
+                } else {
+                    context.lineTo(positions[i].x, positions[i].y);
+                }
+            }
+            context.stroke();
+            
+            // 左目
+            context.beginPath();
+            for (let i = 36; i <= 41; i++) {
+                if (i === 36) {
+                    context.moveTo(positions[i].x, positions[i].y);
+                } else {
+                    context.lineTo(positions[i].x, positions[i].y);
+                }
+            }
+            context.lineTo(positions[36].x, positions[36].y);
+            context.stroke();
+            
+            // 右目
+            context.beginPath();
+            for (let i = 42; i <= 47; i++) {
+                if (i === 42) {
+                    context.moveTo(positions[i].x, positions[i].y);
+                } else {
+                    context.lineTo(positions[i].x, positions[i].y);
+                }
+            }
+            context.lineTo(positions[42].x, positions[42].y);
+            context.stroke();
+            
+            // 口
+            context.beginPath();
+            for (let i = 48; i <= 59; i++) {
+                if (i === 48) {
+                    context.moveTo(positions[i].x, positions[i].y);
+                } else {
+                    context.lineTo(positions[i].x, positions[i].y);
+                }
+            }
+            context.lineTo(positions[48].x, positions[48].y);
+            context.stroke();
+            
+            // 口（内側）
+            context.beginPath();
+            for (let i = 60; i <= 67; i++) {
+                if (i === 60) {
+                    context.moveTo(positions[i].x, positions[i].y);
+                } else {
+                    context.lineTo(positions[i].x, positions[i].y);
+                }
+            }
+            context.lineTo(positions[60].x, positions[60].y);
+            context.stroke();
+        }
+        
+        // イベントリスナー
+        startButton.addEventListener('click', startCamera);
+        stopButton.addEventListener('click', stopCamera);
+        
+        // ページロード時にモデルを読み込む
+        document.addEventListener('DOMContentLoaded', loadModels);
     </script>
 </body>
 </html>
