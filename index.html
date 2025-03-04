@@ -1,501 +1,186 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>リアルタイム顔特徴点抽出</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/3.9.0/tf.min.js" onerror="handleScriptError('TensorFlow.js')"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow-models/face-landmarks-detection/1.0.2/face-landmarks-detection.min.js" onerror="handleScriptError('Face Landmarks Detection')"></script>
-  <script>
-    function handleScriptError(scriptName) {
-      document.getElementById('loading').querySelector('.loading-message').innerHTML = `
-        <div style="color: red; font-weight: bold; margin-bottom: 10px;">
-          ライブラリの読み込みに失敗しました: ${scriptName}
-        </div>
-        <div style="font-size: 14px; margin-bottom: 10px;">
-          必要なJavaScriptライブラリを読み込めませんでした。
-        </div>
-        <div style="font-size: 14px;">
-          考えられる原因:
-          <ul style="text-align: left; margin-top: 5px;">
-            <li>インターネット接続に問題がある</li>
-            <li>CDNサービスが一時的に利用できない</li>
-            <li>コンテンツブロッカーがスクリプトを阻止している</li>
-          </ul>
-        </div>
-        <button onclick="window.location.reload()" style="margin-top: 10px; padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
-          ページを再読み込み
-        </button>
-      `;
-    }
-  </script>
-  <style>
-    body {
-      font-family: 'Helvetica Neue', Arial, sans-serif;
-      margin: 0;
-      padding: 20px;
-      background-color: #f8f9fa;
-      color: #333;
-    }
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      display: grid;
-      grid-template-columns: 2fr 1fr;
-      gap: 20px;
-    }
-    h1 {
-      grid-column: 1 / -1;
-      text-align: center;
-      color: #2c3e50;
-      margin-bottom: 30px;
-      font-weight: 300;
-      font-size: 2.5rem;
-    }
-    .video-container {
-      position: relative;
-      background-color: #fff;
-      border-radius: 10px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      overflow: hidden;
-      padding: 15px;
-    }
-    .info-panel {
-      background-color: #fff;
-      border-radius: 10px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-    }
-    #video, #canvas {
-      width: 100%;
-      border-radius: 5px;
-    }
-    #canvas {
-      position: absolute;
-      left: 15px;
-      top: 15px;
-    }
-    .fps {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      background-color: rgba(0, 0, 0, 0.7);
-      color: #fff;
-      padding: 5px 10px;
-      border-radius: 4px;
-      font-size: 14px;
-    }
-    .control-panel {
-      display: flex;
-      justify-content: center;
-      margin: 15px 0;
-      grid-column: 1 / -1;
-    }
-    button {
-      background-color: #3498db;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      margin: 0 10px;
-      border-radius: 5px;
-      font-size: 16px;
-      cursor: pointer;
-      transition: background-color 0.3s;
-    }
-    button:hover {
-      background-color: #2980b9;
-    }
-    .landmark-info {
-      margin-top: 10px;
-      overflow-y: auto;
-      max-height: 300px;
-      font-family: monospace;
-      font-size: 14px;
-      background-color: #f5f5f5;
-      padding: 10px;
-      border-radius: 5px;
-    }
-    .info-section {
-      margin-bottom: 15px;
-    }
-    .info-section h3 {
-      margin-top: 0;
-      color: #2c3e50;
-      font-weight: 500;
-      border-bottom: 1px solid #eee;
-      padding-bottom: 5px;
-    }
-    .loading {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: rgba(255, 255, 255, 0.9);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      flex-direction: column;
-      z-index: 1000;
-    }
-    .loading-message {
-      margin-top: 20px;
-      font-size: 18px;
-    }
-    .spinner {
-      border: 5px solid #f3f3f3;
-      border-top: 5px solid #3498db;
-      border-radius: 50%;
-      width: 50px;
-      height: 50px;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arabesque</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px 0;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 18px;
+        }
+        
+        .card-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .card a {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+        }
+        
+        .card-img {
+            height: 160px;
+            background-color: #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 24px;
+        }
+        
+        .card-content {
+            padding: 20px;
+        }
+        
+        .card-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .card-description {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        footer {
+            margin-top: 50px;
+            text-align: center;
+            color: #999;
+            padding: 20px 0;
+        }
+        
+        @media (max-width: 768px) {
+            .card-container {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            }
+        }
+    </style>
 </head>
 <body>
-  <div class="loading" id="loading">
-    <div class="spinner"></div>
-    <div class="loading-message">モデルを読み込み中...</div>
-  </div>
-
-  <div class="container">
-    <h1>リアルタイム顔特徴点抽出</h1>
-    
-    <div class="video-container">
-      <video id="video" playsinline autoplay></video>
-      <canvas id="canvas"></canvas>
-      <div class="fps" id="fps">FPS: 0</div>
-    </div>
-    
-    <div class="info-panel">
-      <div class="info-section">
-        <h3>顔検出状態</h3>
-        <div id="face-status">検出中...</div>
-      </div>
-      
-      <div class="info-section">
-        <h3>主要特徴点</h3>
-        <div id="key-landmarks">
-          <div>目：未検出</div>
-          <div>鼻：未検出</div>
-          <div>口：未検出</div>
-          <div>顎：未検出</div>
-        </div>
-      </div>
-      
-      <div class="info-section">
-        <h3>詳細データ</h3>
-        <div class="landmark-info" id="landmark-data">データを読み込み中...</div>
-      </div>
-    </div>
-    
-    <div class="control-panel">
-      <button id="start-btn">開始</button>
-      <button id="stop-btn">停止</button>
-    </div>
-  </div>
-
-  <script>
-    // DOM要素の取得
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const fpsElement = document.getElementById('fps');
-    const faceStatusElement = document.getElementById('face-status');
-    const keyLandmarksElement = document.getElementById('key-landmarks');
-    const landmarkDataElement = document.getElementById('landmark-data');
-    const startButton = document.getElementById('start-btn');
-    const stopButton = document.getElementById('stop-btn');
-    const loadingElement = document.getElementById('loading');
-
-    // 変数の初期化
-    let model;
-    let streaming = false;
-    let lastFrameTime = 0;
-    let frameCount = 0;
-    let fps = 0;
-    let animationId;
-
-    // ランドマークの色定義
-    const LANDMARK_COLORS = {
-      silhouette: '#FF3030',
-      lipsUpperOuter: '#FF8080',
-      lipsLowerOuter: '#FF8080',
-      lipsUpperInner: '#FF8080',
-      lipsLowerInner: '#FF8080',
-      rightEyeUpper0: '#30FF30',
-      rightEyeLower0: '#30FF30',
-      rightEyeUpper1: '#30FF30',
-      rightEyeLower1: '#30FF30',
-      rightEyeUpper2: '#30FF30',
-      rightEyeLower2: '#30FF30',
-      rightEyeLower3: '#30FF30',
-      rightEyebrowUpper: '#30FFFF',
-      rightEyebrowLower: '#30FFFF',
-      leftEyeUpper0: '#3030FF',
-      leftEyeLower0: '#3030FF',
-      leftEyeUpper1: '#3030FF',
-      leftEyeLower1: '#3030FF',
-      leftEyeUpper2: '#3030FF',
-      leftEyeLower2: '#3030FF',
-      leftEyeLower3: '#3030FF',
-      leftEyebrowUpper: '#FF30FF',
-      leftEyebrowLower: '#FF30FF',
-      midwayBetweenEyes: '#FFFF30',
-      noseTip: '#FF6600',
-      noseBottom: '#FF6600',
-      noseRightCorner: '#FF6600',
-      noseLeftCorner: '#FF6600',
-      rightCheek: '#FFCC00',
-      leftCheek: '#FFCC00'
-    };
-
-    // 主要ランドマークグループ
-    const KEY_LANDMARK_GROUPS = {
-      eyes: ['rightEyeUpper0', 'rightEyeLower0', 'leftEyeUpper0', 'leftEyeLower0', 'rightEyebrowUpper', 'leftEyebrowUpper'],
-      nose: ['noseTip', 'noseBottom', 'noseRightCorner', 'noseLeftCorner'],
-      mouth: ['lipsUpperOuter', 'lipsLowerOuter', 'lipsUpperInner', 'lipsLowerInner'],
-      jawline: ['silhouette']
-    };
-
-    // WebGLのサポート確認
-    function checkWebGLSupport() {
-      const canvas = document.createElement('canvas');
-      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-      if (!gl) {
-        loadingElement.querySelector('.loading-message').innerHTML = `
-          <div style="color: red; font-weight: bold; margin-bottom: 10px;">
-            WebGLがサポートされていません
-          </div>
-          <div style="font-size: 14px; margin-bottom: 10px;">
-            お使いのブラウザはWebGLをサポートしていないか、無効化されています。
-          </div>
-          <div style="font-size: 14px;">
-            解決方法:
-            <ul style="text-align: left; margin-top: 5px;">
-              <li>ブラウザの設定でWebGLを有効にする</li>
-              <li>最新のChromeやFirefoxなど、別のブラウザを試す</li>
-              <li>グラフィックドライバを更新する</li>
-            </ul>
-          </div>
-        `;
-        return false;
-      }
-      return true;
-    }
-
-    // モデルの初期化
-    async function initModel() {
-      // WebGLのサポートを確認
-      if (!checkWebGLSupport()) {
-        return;
-      }
-      try {
-        model = await faceLandmarksDetection.load(
-          faceLandmarksDetection.SupportedPackages.mediapipeFacemesh,
-          { maxFaces: 1 }
-        );
-        loadingElement.style.display = 'none';
-        console.log('モデルの読み込みが完了しました');
-      } catch (error) {
-        console.error('モデルの読み込みに失敗しました:', error);
-        loadingElement.querySelector('.loading-message').innerHTML = `
-          <div style="color: red; font-weight: bold; margin-bottom: 10px;">
-            モデルの読み込みに失敗しました
-          </div>
-          <div style="font-size: 14px; margin-bottom: 10px;">
-            エラー内容: ${error.message || '不明なエラー'}
-          </div>
-          <div style="font-size: 14px;">
-            考えられる原因:
-            <ul style="text-align: left; margin-top: 5px;">
-              <li>インターネット接続に問題がある</li>
-              <li>使用中のブラウザが対応していない</li>
-              <li>TensorFlow.jsのライブラリに問題がある</li>
-              <li>WebGLが無効化されている</li>
-            </ul>
-          </div>
-          <button onclick="window.location.reload()" style="margin-top: 10px; padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
-            ページを再読み込み
-          </button>
-        `;
-      }
-    }
-
-    // カメラの初期化
-    async function setupCamera() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: 640, height: 480 },
-          audio: false
-        });
-        video.srcObject = stream;
+    <div class="container">
+        <header>
+            <h1>Arabesque</h1>
+        </header>
         
-        return new Promise((resolve) => {
-          video.onloadedmetadata = () => {
-            resolve(video);
-          };
-        });
-      } catch (error) {
-        console.error('カメラのアクセスに失敗しました:', error);
-        faceStatusElement.textContent = 'カメラにアクセスできません。カメラの許可を確認してください。';
-      }
-    }
-
-    // キャンバスのリサイズ
-    function resizeCanvas() {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-    }
-
-    // 顔のランドマークを検出
-    async function detectFaces() {
-      if (!model || !streaming) return;
-
-      // FPSの計算
-      const now = performance.now();
-      frameCount++;
-      
-      if (now - lastFrameTime >= 1000) {
-        fps = Math.round(frameCount * 1000 / (now - lastFrameTime));
-        frameCount = 0;
-        lastFrameTime = now;
-        fpsElement.textContent = `FPS: ${fps}`;
-      }
-
-      try {
-        const predictions = await model.estimateFaces({
-          input: video,
-          returnTensors: false,
-          flipHorizontal: false,
-          predictIrises: true
-        });
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        if (predictions.length > 0) {
-          faceStatusElement.textContent = '顔を検出しました';
-          const keyLandmarkStatus = {
-            eyes: false,
-            nose: false,
-            mouth: false,
-            jawline: false
-          };
-
-          // 最初の顔の特徴点を描画
-          const face = predictions[0];
-          const keypoints = face.annotations;
-          
-          // ランドマークデータの更新
-          let landmarkDataText = '';
-          
-          // 各ランドマークグループを処理
-          Object.entries(keypoints).forEach(([name, points]) => {
-            if (points && points.length > 0) {
-              const color = LANDMARK_COLORS[name] || '#FF0000';
-              
-              // このランドマークグループが主要グループに属しているか確認
-              Object.entries(KEY_LANDMARK_GROUPS).forEach(([groupName, landmarks]) => {
-                if (landmarks.includes(name)) {
-                  keyLandmarkStatus[groupName] = true;
-                }
-              });
-              
-              // ランドマークを描画
-              for (let i = 0; i < points.length; i++) {
-                const [x, y, z] = points[i];
-                ctx.beginPath();
-                ctx.arc(x, y, 2, 0, 2 * Math.PI);
-                ctx.fillStyle = color;
-                ctx.fill();
-              }
-              
-              // データテキストに追加
-              landmarkDataText += `${name}: ${points.length}点\n`;
-              landmarkDataText += `例: [${Math.round(points[0][0])}, ${Math.round(points[0][1])}, ${Math.round(points[0][2])}]\n`;
-            }
-          });
-          
-          // 顔の境界ボックスを描画
-          const { topLeft, bottomRight } = face.boundingBox;
-          ctx.strokeStyle = '#00FFFF';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(
-            topLeft[0], topLeft[1],
-            bottomRight[0] - topLeft[0], bottomRight[1] - topLeft[1]
-          );
-          
-          // 主要ランドマークのステータス更新
-          keyLandmarksElement.innerHTML = `
-            <div>目：${keyLandmarkStatus.eyes ? '検出 ✓' : '未検出'}</div>
-            <div>鼻：${keyLandmarkStatus.nose ? '検出 ✓' : '未検出'}</div>
-            <div>口：${keyLandmarkStatus.mouth ? '検出 ✓' : '未検出'}</div>
-            <div>顎：${keyLandmarkStatus.jawline ? '検出 ✓' : '未検出'}</div>
-          `;
-          
-          // 詳細データの表示
-          landmarkDataElement.textContent = landmarkDataText;
-          
-        } else {
-          faceStatusElement.textContent = '顔が見つかりません';
-          keyLandmarksElement.innerHTML = `
-            <div>目：未検出</div>
-            <div>鼻：未検出</div>
-            <div>口：未検出</div>
-            <div>顎：未検出</div>
-          `;
-          landmarkDataElement.textContent = 'データなし';
-        }
-      } catch (error) {
-        console.error('顔の検出中にエラーが発生しました:', error);
-      }
-      
-      animationId = requestAnimationFrame(detectFaces);
-    }
-
-    // 検出の開始
-    function startDetection() {
-      if (!streaming && model) {
-        streaming = true;
-        resizeCanvas();
-        detectFaces();
-        startButton.disabled = true;
-        stopButton.disabled = false;
-      }
-    }
-
-    // 検出の停止
-    function stopDetection() {
-      streaming = false;
-      if (animationId) {
-        cancelAnimationFrame(animationId);
-      }
-      startButton.disabled = false;
-      stopButton.disabled = true;
-    }
-
-    // イベントリスナーの設定
-    startButton.addEventListener('click', startDetection);
-    stopButton.addEventListener('click', stopDetection);
-    stopButton.disabled = true;
-
-    // 初期化
-    async function init() {
-      await initModel();
-      await setupCamera();
-      // 自動的に開始
-      startDetection();
-    }
-
-    // アプリケーション開始
-    init();
-  </script>
+        <div class="card-container">
+            <!-- カード1 -->
+            <div class="card">
+                <a href="https://nallto.github.io/arabesque/page1">
+                    <div class="card-img">ページ1</div>
+                    <div class="card-content">
+                        <h2 class="card-title">ページ1</h2>
+                        <p class="card-description">ページ1</p>
+                    </div>
+                </a>
+            </div>
+            
+            <!-- カード2 -->
+            <div class="card">
+                <a href="https://nallto.github.io/arabesque/page2">
+                    <div class="card-img">ページ2</div>
+                    <div class="card-content">
+                        <h2 class="card-title">ページ2</h2>
+                        <p class="card-description">ページ2</p>
+                    </div>
+                </a>
+            </div>
+            
+            <!-- カード3 -->
+            <div class="card">
+                <a href="https://nallto.github.io/arabesque/page3">
+                    <div class="card-img">ページ3</div>
+                    <div class="card-content">
+                        <h2 class="card-title">ページ3</h2>
+                        <p class="card-description">ページ3</p>
+                    </div>
+                </a>
+            </div>
+            
+            <!-- カード4 -->
+            <div class="card">
+                <a href="https://nallto.github.io/arabesque/page4">
+                    <div class="card-img">ページ4</div>
+                    <div class="card-content">
+                        <h2 class="card-title">ページ4</h2>
+                        <p class="card-description">ページ4</p>
+                    </div>
+                </a>
+            </div>
+            
+            <!-- カード5 -->
+            <div class="card">
+                <a href="https://nallto.github.io/arabesque/page5">
+                    <div class="card-img">ページ5</div>
+                    <div class="card-content">
+                        <h2 class="card-title">ページ5</h2>
+                        <p class="card-description">ページ5</p>
+                    </div>
+                </a>
+            </div>
+            
+            <!-- カード6 -->
+            <div class="card">
+                <a href="https://nallto.github.io/arabesque/page6">
+                    <div class="card-img">ページ6</div>
+                    <div class="card-content">
+                        <h2 class="card-title">ページ6</h2>
+                        <p class="card-description">ページ6</p>
+                    </div>
+                </a>
+            </div>
+        </div>
+        
+        <footer>
+            <p></p>
+        </footer>
+    </div>
 </body>
 </html>
