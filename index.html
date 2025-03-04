@@ -4,8 +4,31 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>リアルタイム顔特徴点抽出</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/3.9.0/tf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow-models/face-landmarks-detection/1.0.2/face-landmarks-detection.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/3.9.0/tf.min.js" onerror="handleScriptError('TensorFlow.js')"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow-models/face-landmarks-detection/1.0.2/face-landmarks-detection.min.js" onerror="handleScriptError('Face Landmarks Detection')"></script>
+  <script>
+    function handleScriptError(scriptName) {
+      document.getElementById('loading').querySelector('.loading-message').innerHTML = `
+        <div style="color: red; font-weight: bold; margin-bottom: 10px;">
+          ライブラリの読み込みに失敗しました: ${scriptName}
+        </div>
+        <div style="font-size: 14px; margin-bottom: 10px;">
+          必要なJavaScriptライブラリを読み込めませんでした。
+        </div>
+        <div style="font-size: 14px;">
+          考えられる原因:
+          <ul style="text-align: left; margin-top: 5px;">
+            <li>インターネット接続に問題がある</li>
+            <li>CDNサービスが一時的に利用できない</li>
+            <li>コンテンツブロッカーがスクリプトを阻止している</li>
+          </ul>
+        </div>
+        <button onclick="window.location.reload()" style="margin-top: 10px; padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
+          ページを再読み込み
+        </button>
+      `;
+    }
+  </script>
   <style>
     body {
       font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -241,8 +264,38 @@
       jawline: ['silhouette']
     };
 
+    // WebGLのサポート確認
+    function checkWebGLSupport() {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (!gl) {
+        loadingElement.querySelector('.loading-message').innerHTML = `
+          <div style="color: red; font-weight: bold; margin-bottom: 10px;">
+            WebGLがサポートされていません
+          </div>
+          <div style="font-size: 14px; margin-bottom: 10px;">
+            お使いのブラウザはWebGLをサポートしていないか、無効化されています。
+          </div>
+          <div style="font-size: 14px;">
+            解決方法:
+            <ul style="text-align: left; margin-top: 5px;">
+              <li>ブラウザの設定でWebGLを有効にする</li>
+              <li>最新のChromeやFirefoxなど、別のブラウザを試す</li>
+              <li>グラフィックドライバを更新する</li>
+            </ul>
+          </div>
+        `;
+        return false;
+      }
+      return true;
+    }
+
     // モデルの初期化
     async function initModel() {
+      // WebGLのサポートを確認
+      if (!checkWebGLSupport()) {
+        return;
+      }
       try {
         model = await faceLandmarksDetection.load(
           faceLandmarksDetection.SupportedPackages.mediapipeFacemesh,
@@ -252,7 +305,26 @@
         console.log('モデルの読み込みが完了しました');
       } catch (error) {
         console.error('モデルの読み込みに失敗しました:', error);
-        loadingElement.querySelector('.loading-message').textContent = 'モデルの読み込みに失敗しました。ページを再読み込みしてください。';
+        loadingElement.querySelector('.loading-message').innerHTML = `
+          <div style="color: red; font-weight: bold; margin-bottom: 10px;">
+            モデルの読み込みに失敗しました
+          </div>
+          <div style="font-size: 14px; margin-bottom: 10px;">
+            エラー内容: ${error.message || '不明なエラー'}
+          </div>
+          <div style="font-size: 14px;">
+            考えられる原因:
+            <ul style="text-align: left; margin-top: 5px;">
+              <li>インターネット接続に問題がある</li>
+              <li>使用中のブラウザが対応していない</li>
+              <li>TensorFlow.jsのライブラリに問題がある</li>
+              <li>WebGLが無効化されている</li>
+            </ul>
+          </div>
+          <button onclick="window.location.reload()" style="margin-top: 10px; padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
+            ページを再読み込み
+          </button>
+        `;
       }
     }
 
