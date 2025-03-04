@@ -3,406 +3,380 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>シンプルな映像処理アプリ</title>
+    <title>リアルタイム顔特徴点検出 - TensorFlow.js版</title>
     <style>
         body {
+            font-family: 'Arial', sans-serif;
             margin: 0;
-            padding: 0;
-            width: 100vw;
-            height: 100vh;
+            padding: 20px;
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
-            font-family: sans-serif;
-            background-color: #f0f0f0;
+            background-color: #f5f5f5;
         }
-        
         h1 {
-            margin-bottom: 20px;
             color: #333;
+            margin-bottom: 20px;
         }
-        
         .container {
-            position: relative;
-            margin: 0 auto;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            border-radius: 8px;
-            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 680px;
         }
-        
-        video, canvas {
+        #videoContainer {
+            position: relative;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 640px;
+        }
+        #video {
+            transform: scaleX(-1);
+            width: 100%;
+            max-width: 640px;
+            border-radius: 8px;
+            background-color: #000;
+        }
+        #canvas {
             position: absolute;
             top: 0;
             left: 0;
+            transform: scaleX(-1);
+            width: 100%;
         }
-        
-        #status {
-            margin-top: 20px;
-            padding: 10px;
-            background-color: #4CAF50;
-            color: white;
-            border-radius: 4px;
-            text-align: center;
+        #info {
+            margin-top: 10px;
+            padding: 15px;
+            background-color: #e9f7fe;
+            border-radius: 5px;
+            width: 100%;
         }
-        
-        .button {
-            margin-top: 20px;
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
             padding: 10px 20px;
-            background-color: #2196F3;
+            background-color: #4285F4;
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 5px;
             cursor: pointer;
             font-size: 16px;
+            transition: background-color 0.3s;
         }
-        
-        .button:hover {
-            background-color: #0b7dda;
+        button:hover {
+            background-color: #3367D6;
         }
-        
-        .button:disabled {
+        button:disabled {
             background-color: #cccccc;
             cursor: not-allowed;
         }
-        
-        .controls {
-            margin-top: 20px;
+        #status {
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            background-color: #e6f2ff;
+            border-left: 4px solid #4285F4;
+            border-radius: 2px;
+            width: 100%;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(66,133,244,0.3);
+            border-radius: 50%;
+            border-top-color: #4285F4;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .landmarks-info {
             display: flex;
-            gap: 10px;
+            justify-content: space-between;
+            flex-wrap: wrap;
         }
-        
-        .filter-option {
-            padding: 8px 15px;
-            background-color: #333;
-            color: white;
-            border: none;
+        .landmarks-info div {
+            margin: 5px 0;
+            padding: 5px 10px;
+            background-color: #f8f9fa;
             border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        .filter-option.active {
-            background-color: #4CAF50;
         }
     </style>
 </head>
 <body>
-    <h1>カメラ映像処理アプリ</h1>
+    <h1>リアルタイム顔特徴点検出</h1>
     
     <div class="container">
-        <video id="video" width="640" height="480"></video>
-        <canvas id="overlay" width="640" height="480"></canvas>
+        <div id="status"><span class="loading"></span>TensorFlow.jsモデルを読み込み中...</div>
+        
+        <div id="videoContainer">
+            <video id="video" autoplay muted playsinline></video>
+            <canvas id="canvas"></canvas>
+        </div>
+        
+        <div class="controls">
+            <button id="startButton" disabled>カメラを開始</button>
+            <button id="stopButton" disabled>停止</button>
+        </div>
+        
+        <div id="info">
+            <p>カメラを起動すると、検出された顔の特徴点（顔メッシュ）が画面上に表示されます。</p>
+            <div class="landmarks-info">
+                <div>検出点数: <span id="landmarkCount">0</span> 点</div>
+                <div>FPS: <span id="fps">0</span></div>
+            </div>
+        </div>
     </div>
-    
-    <div id="status">カメラを準備中...</div>
-    
-    <button id="startButton" class="button">開始</button>
-    
-    <div class="controls">
-        <button class="filter-option active" data-filter="normal">通常</button>
-        <button class="filter-option" data-filter="grayscale">グレースケール</button>
-        <button class="filter-option" data-filter="edges">エッジ検出</button>
-        <button class="filter-option" data-filter="threshold">しきい値処理</button>
-        <button class="filter-option" data-filter="invert">色反転</button>
-    </div>
+
+    <!-- TensorFlow.js と Facemesh モデルのロード -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.2.0/tf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow-models/facemesh/0.0.5/facemesh.min.js"></script>
     
     <script>
-        // DOM要素
         const video = document.getElementById('video');
-        const overlay = document.getElementById('overlay');
-        const context = overlay.getContext('2d');
-        const statusText = document.getElementById('status');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
         const startButton = document.getElementById('startButton');
-        const filterButtons = document.querySelectorAll('.filter-option');
+        const stopButton = document.getElementById('stopButton');
+        const landmarkCount = document.getElementById('landmarkCount');
+        const fpsText = document.getElementById('fps');
+        const statusText = document.getElementById('status');
         
-        // 状態変数
+        let stream = null;
         let isRunning = false;
-        let currentFilter = 'normal';
+        let model = null;
+        let lastFrameTime = 0;
         
-        // カメラ設定
-        async function setupCamera() {
-            statusText.textContent = 'カメラへのアクセスを要求中...';
+        // TensorFlow.jsモデルを読み込む
+        async function loadModel() {
+            try {
+                statusText.innerHTML = '<span class="loading"></span>顔メッシュモデルを読み込み中...';
+                
+                // facemeshモデルを読み込む
+                model = await facemesh.load({
+                    maxFaces: 1, // 検出する最大顔数
+                    inputResolution: { width: 640, height: 480 },
+                    scale: 0.5 // 検出精度と速度のバランス
+                });
+                
+                console.log('FaceMeshモデルの読み込みが完了しました');
+                statusText.innerHTML = '準備完了！カメラを開始ボタンを押してください';
+                startButton.disabled = false;
+            } catch (error) {
+                console.error('モデルの読み込みに失敗しました:', error);
+                statusText.innerHTML = 'エラー: モデルの読み込みに失敗しました。ページを再読み込みしてください。<br>' 
+                    + error.message;
+            }
+        }
+        
+        // カメラを開始する
+        async function startVideo() {
+            if (!model) {
+                statusText.innerHTML = 'モデルの読み込みが完了していません。しばらくお待ちください。';
+                return;
+            }
             
             try {
-                // シンプルな制約を使用
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: true,
+                statusText.innerHTML = '<span class="loading"></span>カメラにアクセス中...';
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: 'user',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    },
                     audio: false
                 });
                 
-                // ビデオ要素に接続
                 video.srcObject = stream;
+                video.onloadedmetadata = function() {
+                    // ビデオのサイズに合わせてキャンバスをリサイズ
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    
+                    startButton.disabled = true;
+                    stopButton.disabled = false;
+                    isRunning = true;
+                    statusText.innerHTML = 'カメラ作動中 - 顔を検出中...';
+                    requestAnimationFrame(detectFaces);
+                };
                 
-                // ビデオの属性を明示的に設定
-                video.setAttribute('autoplay', '');
-                video.setAttribute('playsinline', ''); // iOSのSafariでインライン再生を許可
-                video.setAttribute('muted', '');
-                
-                return new Promise((resolve) => {
-                    // メタデータ読み込み完了を待機
-                    video.onloadedmetadata = () => {
-                        // 再生を明示的に開始
-                        video.play().then(() => {
-                            statusText.textContent = 'カメラの準備完了！';
-                            resolve(video);
-                        }).catch(e => {
-                            console.error('ビデオ再生エラー:', e);
-                            statusText.textContent = 'ビデオ再生エラー: ' + e.message;
-                            statusText.style.backgroundColor = '#f44336';
-                        });
-                    };
-                });
+                video.play();
             } catch (error) {
-                console.error('カメラアクセスエラー:', error);
-                statusText.textContent = 'カメラアクセスエラー: ' + error.message;
-                statusText.style.backgroundColor = '#f44336';
-                throw error;
+                console.error('カメラへのアクセスに失敗しました:', error);
+                statusText.innerHTML = 'エラー: カメラへのアクセスに失敗しました。カメラの使用を許可してください。<br>' 
+                    + error.message;
             }
         }
         
-        // 映像処理ループ
-        function processVideo() {
+        // カメラを停止する
+        function stopVideo() {
+            if (stream) {
+                stream.getTracks().forEach(track => {
+                    track.stop();
+                });
+                video.srcObject = null;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                isRunning = false;
+                landmarkCount.textContent = '0';
+                fpsText.textContent = '0';
+                statusText.innerHTML = '停止しました。再開するには「カメラを開始」ボタンを押してください。';
+            }
+        }
+        
+        // 顔と特徴点を検出して描画する
+        async function detectFaces(timestamp) {
             if (!isRunning) return;
             
-            // キャンバスに映像を描画
-            context.drawImage(video, 0, 0, overlay.width, overlay.height);
-            
-            // 選択されたフィルターを適用
-            applyFilter(currentFilter);
-            
-            // 顔検出の代わりに簡単な特徴点をシミュレート
-            if (currentFilter === 'edges' || currentFilter === 'threshold') {
-                drawSimulatedFacePoints();
+            // FPSを計算
+            if (lastFrameTime) {
+                const fps = Math.round(1000 / (timestamp - lastFrameTime));
+                fpsText.textContent = fps;
             }
+            lastFrameTime = timestamp;
             
-            // ステータス表示
-            context.fillStyle = 'rgba(0, 0, 0, 0.5)';
-            context.fillRect(10, 10, 230, 30);
-            context.fillStyle = 'white';
-            context.font = '16px Arial';
-            context.fillText(`フィルター: ${getFilterName(currentFilter)}`, 20, 30);
-            
-            requestAnimationFrame(processVideo);
-        }
-        
-        // フィルター名の日本語表示
-        function getFilterName(filter) {
-            const names = {
-                'normal': '通常',
-                'grayscale': 'グレースケール',
-                'edges': 'エッジ検出',
-                'threshold': 'しきい値処理',
-                'invert': '色反転'
-            };
-            return names[filter] || filter;
-        }
-        
-        // 映像フィルター適用
-        function applyFilter(filter) {
-            const imageData = context.getImageData(0, 0, overlay.width, overlay.height);
-            const data = imageData.data;
-            
-            switch (filter) {
-                case 'grayscale':
-                    for (let i = 0; i < data.length; i += 4) {
-                        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                        data[i] = avg;     // R
-                        data[i + 1] = avg; // G
-                        data[i + 2] = avg; // B
-                    }
-                    break;
-                    
-                case 'invert':
-                    for (let i = 0; i < data.length; i += 4) {
-                        data[i] = 255 - data[i];         // R
-                        data[i + 1] = 255 - data[i + 1]; // G
-                        data[i + 2] = 255 - data[i + 2]; // B
-                    }
-                    break;
-                    
-                case 'threshold':
-                    for (let i = 0; i < data.length; i += 4) {
-                        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                        const val = avg > 128 ? 255 : 0;
-                        data[i] = val;     // R
-                        data[i + 1] = val; // G
-                        data[i + 2] = val; // B
-                    }
-                    break;
-                    
-                case 'edges':
-                    // 簡易的なエッジ検出（差分検出）
-                    const tempCanvas = document.createElement('canvas');
-                    const tempContext = tempCanvas.getContext('2d');
-                    tempCanvas.width = overlay.width;
-                    tempCanvas.height = overlay.height;
-                    
-                    // グレースケール化して一時キャンバスに保存
-                    tempContext.drawImage(video, 0, 0, overlay.width, overlay.height);
-                    const tempData = tempContext.getImageData(0, 0, overlay.width, overlay.height);
-                    const tempPixels = tempData.data;
-                    
-                    for (let i = 0; i < tempPixels.length; i += 4) {
-                        const avg = (tempPixels[i] + tempPixels[i + 1] + tempPixels[i + 2]) / 3;
-                        tempPixels[i] = avg;
-                        tempPixels[i + 1] = avg;
-                        tempPixels[i + 2] = avg;
-                    }
-                    
-                    tempContext.putImageData(tempData, 0, 0);
-                    
-                    // 差分を計算して輪郭を強調
-                    for (let y = 1; y < overlay.height - 1; y++) {
-                        for (let x = 1; x < overlay.width - 1; x++) {
-                            const idx = (y * overlay.width + x) * 4;
-                            const idxLeft = (y * overlay.width + (x - 1)) * 4;
-                            const idxRight = (y * overlay.width + (x + 1)) * 4;
-                            const idxUp = ((y - 1) * overlay.width + x) * 4;
-                            const idxDown = ((y + 1) * overlay.width + x) * 4;
-                            
-                            // 周囲のピクセルとの差分を計算
-                            const diff = Math.abs(tempPixels[idx] - tempPixels[idxLeft]) +
-                                        Math.abs(tempPixels[idx] - tempPixels[idxRight]) +
-                                        Math.abs(tempPixels[idx] - tempPixels[idxUp]) +
-                                        Math.abs(tempPixels[idx] - tempPixels[idxDown]);
-                            
-                            // 差分が大きいほど輪郭（エッジ）と判断
-                            const edge = diff > 100 ? 255 : 0;
-                            
-                            data[idx] = edge;
-                            data[idx + 1] = edge;
-                            data[idx + 2] = edge;
-                        }
-                    }
-                    break;
-                
-                case 'normal':
-                default:
-                    // 何もしない（元の映像をそのまま表示）
-                    break;
-            }
-            
-            context.putImageData(imageData, 0, 0);
-        }
-        
-        // 顔特徴点の代わりに簡単な点や線を描画（シミュレーション）
-        function drawSimulatedFacePoints() {
-            // デバッグ情報を表示
-            context.fillStyle = 'rgba(255, 255, 255, 0.7)';
-            context.fillRect(10, overlay.height - 60, 300, 50);
-            context.fillStyle = 'black';
-            context.font = '12px Arial';
-            context.fillText(`カメラ接続状態: ${video.srcObject ? '接続中' : '未接続'}`, 15, overlay.height - 40);
-            context.fillText(`動作状態: ${isRunning ? '実行中' : '停止中'}`, 15, overlay.height - 25);
-            
-            // 中心座標（カメラ映像の中央付近）
-            const centerX = overlay.width / 2;
-            const centerY = overlay.height / 2;
-            
-            // 顔の大きさ（楕円）
-            const faceWidth = overlay.width / 3;
-            const faceHeight = overlay.height / 2.2;
-            
-            // 特徴点の色
-            context.fillStyle = 'rgba(0, 255, 0, 0.8)';
-            context.strokeStyle = 'rgba(0, 255, 0, 0.8)';
-            context.lineWidth = 2;
-            
-            // 顔の輪郭（楕円）
-            context.beginPath();
-            context.ellipse(centerX, centerY, faceWidth / 2, faceHeight / 2, 0, 0, 2 * Math.PI);
-            context.stroke();
-            
-            // 目（左）
-            const leftEyeX = centerX - faceWidth / 5;
-            const eyeY = centerY - faceHeight / 8;
-            context.beginPath();
-            context.ellipse(leftEyeX, eyeY, faceWidth / 12, faceHeight / 20, 0, 0, 2 * Math.PI);
-            context.stroke();
-            
-            // 目（右）
-            const rightEyeX = centerX + faceWidth / 5;
-            context.beginPath();
-            context.ellipse(rightEyeX, eyeY, faceWidth / 12, faceHeight / 20, 0, 0, 2 * Math.PI);
-            context.stroke();
-            
-            // 鼻
-            context.beginPath();
-            context.moveTo(centerX, eyeY + faceHeight / 10);
-            context.lineTo(centerX - faceWidth / 20, centerY + faceHeight / 15);
-            context.lineTo(centerX + faceWidth / 20, centerY + faceHeight / 15);
-            context.closePath();
-            context.stroke();
-            
-            // 口
-            const mouthY = centerY + faceHeight / 4;
-            context.beginPath();
-            context.moveTo(centerX - faceWidth / 5, mouthY);
-            context.quadraticCurveTo(centerX, mouthY + faceHeight / 20, centerX + faceWidth / 5, mouthY);
-            context.stroke();
-            
-            // 顔の特徴点（ランダム）
-            const numPoints = 30;
-            for (let i = 0; i < numPoints; i++) {
-                // 楕円上の点を生成
-                const angle = Math.random() * 2 * Math.PI;
-                const r1 = Math.random() * 0.8 + 0.2; // 0.2〜1.0
-                const x = centerX + Math.cos(angle) * (faceWidth / 2) * r1;
-                const y = centerY + Math.sin(angle) * (faceHeight / 2) * r1;
-                
-                // 点を描画
-                context.beginPath();
-                context.arc(x, y, 2, 0, 2 * Math.PI);
-                context.fill();
-            }
-        }
-        
-        // アプリの起動
-        async function startApp() {
             try {
-                if (!isRunning) {
-                    await setupCamera();
-                    isRunning = true;
-                    processVideo();
-                    startButton.textContent = '停止';
-                    statusText.textContent = '映像処理中...';
+                // FaceMeshモデルで顔を検出
+                const predictions = await model.estimateFaces(video);
+                
+                // キャンバスをクリア
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                if (predictions.length > 0) {
+                    predictions.forEach(prediction => {
+                        const keypoints = prediction.scaledMesh;
+                        
+                        // 検出された特徴点の数を表示
+                        landmarkCount.textContent = keypoints.length;
+                        
+                        // 顔の特徴点を描画
+                        ctx.fillStyle = '#FF0000';
+                        
+                        // すべての特徴点を描画
+                        for (let i = 0; i < keypoints.length; i++) {
+                            const [x, y] = keypoints[i];
+                            
+                            ctx.beginPath();
+                            ctx.arc(x, y, 1, 0, 2 * Math.PI);
+                            ctx.fill();
+                        }
+                        
+                        // 顔の輪郭を描画
+                        drawFaceMesh(ctx, keypoints);
+                    });
+                    
+                    statusText.innerHTML = `${predictions.length}人の顔を検出中 - 特徴点: ${landmarkCount.textContent}点`;
                 } else {
-                    isRunning = false;
-                    if (video.srcObject) {
-                        video.srcObject.getTracks().forEach(track => track.stop());
-                        video.srcObject = null;
-                    }
-                    context.clearRect(0, 0, overlay.width, overlay.height);
-                    startButton.textContent = '開始';
-                    statusText.textContent = '停止中';
+                    landmarkCount.textContent = '0';
+                    statusText.innerHTML = '顔を検出できません。カメラに顔を向けてください。';
                 }
             } catch (error) {
-                console.error('アプリ起動エラー:', error);
+                console.error('顔検出中にエラーが発生しました:', error);
+                statusText.innerHTML = 'エラー: 検出処理中にエラーが発生しました。<br>' + error.message;
             }
+            
+            // 再帰的に呼び出して連続検出
+            requestAnimationFrame(detectFaces);
         }
         
-        // フィルター切り替え
-        function changeFilter(event) {
-            if (!event.target.classList.contains('filter-option')) return;
+        // 顔メッシュの特定部位を描画する
+        function drawFaceMesh(ctx, keypoints) {
+            if (!keypoints || keypoints.length === 0) return;
             
-            // 現在のフィルターボタンから active クラスを削除
-            filterButtons.forEach(button => button.classList.remove('active'));
+            // 目の輪郭
+            const leftEyeUpper = [263, 249, 390, 373, 374, 380, 381, 382, 362];
+            const leftEyeLower = [263, 466, 388, 387, 386, 385, 384, 398, 362];
+            const rightEyeUpper = [33, 7, 163, 144, 145, 153, 154, 155, 133];
+            const rightEyeLower = [33, 246, 161, 160, 159, 158, 157, 173, 133];
             
-            // 選択されたボタンに active クラスを追加
-            event.target.classList.add('active');
+            // 唇
+            const upperLip = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291];
+            const lowerLip = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291];
             
-            // フィルターを設定
-            currentFilter = event.target.dataset.filter;
+            // 顔の輪郭
+            const faceOval = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
+            
+            // 眉毛
+            const leftEyebrow = [276, 283, 282, 295, 285, 300, 293, 334, 296, 336];
+            const rightEyebrow = [46, 53, 52, 65, 55, 70, 63, 105, 66, 107];
+            
+            // 鼻
+            const nose = [168, 197, 5, 4, 45, 275, 440, 344, 278];
+            
+            // 各パーツを描画
+            drawPath(ctx, keypoints, leftEyeUpper, true, '#0000FF');
+            drawPath(ctx, keypoints, leftEyeLower, true, '#0000FF');
+            drawPath(ctx, keypoints, rightEyeUpper, true, '#0000FF');
+            drawPath(ctx, keypoints, rightEyeLower, true, '#0000FF');
+            
+            drawPath(ctx, keypoints, upperLip, true, '#FF00FF');
+            drawPath(ctx, keypoints, lowerLip, true, '#FF00FF');
+            
+            drawPath(ctx, keypoints, faceOval, true, '#00FF00');
+            
+            drawPath(ctx, keypoints, leftEyebrow, false, '#00FFFF');
+            drawPath(ctx, keypoints, rightEyebrow, false, '#00FFFF');
+            
+            drawPath(ctx, keypoints, nose, false, '#FFFF00');
         }
         
-        // イベントリスナー
-        startButton.addEventListener('click', startApp);
-        document.querySelector('.controls').addEventListener('click', changeFilter);
+        // 特徴点をつなげて線を描画
+        function drawPath(ctx, keypoints, indices, closePath = false, color = '#00FF00') {
+            if (!keypoints || keypoints.length === 0 || !indices || indices.length === 0) return;
+            
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            const [x0, y0] = keypoints[indices[0]];
+            ctx.moveTo(x0, y0);
+            
+            for (let i = 1; i < indices.length; i++) {
+                const [x, y] = keypoints[indices[i]];
+                ctx.lineTo(x, y);
+            }
+            
+            if (closePath) {
+                ctx.closePath();
+            }
+            
+            ctx.stroke();
+        }
         
-        // ページ読み込み時のカメラセットアップを削除し、ボタンクリック時のみ実行するように変更
-        window.addEventListener('load', () => {
-            statusText.textContent = '「開始」ボタンをクリックしてカメラを開始してください';
-            startButton.disabled = false;
+        // イベントリスナーの設定
+        startButton.addEventListener('click', startVideo);
+        stopButton.addEventListener('click', stopVideo);
+        
+        // ウィンドウサイズ変更時にキャンバスをリサイズ
+        window.addEventListener('resize', function() {
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+            }
+        });
+        
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            // TensorFlow.jsが読み込まれているか確認
+            if (typeof tf === 'undefined' || typeof facemesh === 'undefined') {
+                statusText.innerHTML = 'エラー: TensorFlow.jsまたはFaceMeshモデルの読み込みに失敗しました。ネットワーク接続を確認してページを再読み込みしてください。';
+                return;
+            }
+            
+            loadModel();
         });
     </script>
 </body>
