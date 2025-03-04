@@ -1,677 +1,553 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3D市街地ビュー - 夕方の西日</title>
-  <style>
-    body { margin: 0; padding: 0; overflow: hidden; }
-    canvas { display: block; }
-    .info {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(0,0,0,0.7);
-      color: white;
-      padding: 10px;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-      border-radius: 5px;
-      pointer-events: none;
-    }
-    .controls {
-      position: absolute;
-      bottom: 10px;
-      left: 10px;
-      background: rgba(0,0,0,0.7);
-      color: white;
-      padding: 10px;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-      border-radius: 5px;
-    }
-    button {
-      margin: 5px;
-      padding: 5px 10px;
-      cursor: pointer;
-    }
-  </style>
+    <meta charset="utf-8">
+    <title>西陽の強い夕方の市街地3Dビュー</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: Arial, Helvetica, sans-serif;
+            pointer-events: none;
+        }
+    </style>
 </head>
 <body>
-  <div class="info">
-    <h3>3D市街地ビュー - 夕方の西日</h3>
-    <p>500m×500mの市街地シミュレーション</p>
-    <p>時間: 夕方（西からの日差し）</p>
-  </div>
-  <div class="controls">
-    <button id="toggleDrive">ドライブモード: OFF</button>
-    <button id="toggleView">視点切替</button>
-  </div>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script>
-    // シーンの設定
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB); // 空色
-    
-    // カメラの設定
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(100, 50, 100);
-    camera.lookAt(0, 0, 0);
-    
-    // レンダラーの設定
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    document.body.appendChild(renderer.domElement);
-    
-    // 光源の設定（夕方の西日）
-    const ambientLight = new THREE.AmbientLight(0x404040, 0.5); // 環境光
-    scene.add(ambientLight);
-    
-    const sunlight = new THREE.DirectionalLight(0xFFA500, 1); // オレンジっぽい夕日
-    sunlight.position.set(-50, 30, 0); // 西から光が差し込む
-    sunlight.castShadow = true;
-    sunlight.shadow.camera.left = -250;
-    sunlight.shadow.camera.right = 250;
-    sunlight.shadow.camera.top = 250;
-    sunlight.shadow.camera.bottom = -250;
-    sunlight.shadow.camera.far = 500;
-    sunlight.shadow.mapSize.width = 2048;
-    sunlight.shadow.mapSize.height = 2048;
-    scene.add(sunlight);
-
-    // 霞効果（夕日の雰囲気）
-    scene.fog = new THREE.FogExp2(0xFFA07A, 0.002);
-    
-    // 地面（500m x 500m）
-    const groundGeometry = new THREE.PlaneGeometry(500, 500);
-    const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 }); // アスファルト色
-    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    scene.add(ground);
-    
-    // 建物タイプの定義
-    const buildingTypes = [
-      {
-        name: "高層ビル",
-        geometry: (x, z) => new THREE.BoxGeometry(15, 40 + Math.random() * 20, 15),
-        material: () => new THREE.MeshLambertMaterial({ color: 0x99CCFF }) // ガラス張りの高層ビル
-      },
-      {
-        name: "中層オフィス",
-        geometry: (x, z) => new THREE.BoxGeometry(20, 20 + Math.random() * 10, 20),
-        material: () => new THREE.MeshLambertMaterial({ color: 0xDDDDDD }) // グレー
-      },
-      {
-        name: "低層商業ビル",
-        geometry: (x, z) => new THREE.BoxGeometry(25, 10 + Math.random() * 5, 20),
-        material: () => new THREE.MeshLambertMaterial({ color: 0xFFCCCC }) // 薄ピンク
-      },
-      {
-        name: "マンション",
-        geometry: (x, z) => new THREE.BoxGeometry(30, 15 + Math.random() * 10, 20),
-        material: () => new THREE.MeshLambertMaterial({ color: 0xCCDDCC }) // 薄緑
-      }
-    ];
-    
-    // 道路の配置（十字路）
-    function createRoads() {
-      // メイン道路（東西）
-      const mainRoadEW = new THREE.Mesh(
-        new THREE.PlaneGeometry(500, 20),
-        new THREE.MeshLambertMaterial({ color: 0x666666 })
-      );
-      mainRoadEW.rotation.x = -Math.PI / 2;
-      mainRoadEW.position.y = 0.1;
-      mainRoadEW.receiveShadow = true;
-      scene.add(mainRoadEW);
-      
-      // メイン道路（南北）
-      const mainRoadNS = new THREE.Mesh(
-        new THREE.PlaneGeometry(20, 500),
-        new THREE.MeshLambertMaterial({ color: 0x666666 })
-      );
-      mainRoadNS.rotation.x = -Math.PI / 2;
-      mainRoadNS.position.y = 0.1;
-      mainRoadNS.receiveShadow = true;
-      scene.add(mainRoadNS);
-      
-      // サブ道路（東西方向に3本）
-      for (let i = -1; i <= 1; i++) {
-        if (i === 0) continue; // メイン道路と重複する位置はスキップ
+    <div id="info">西陽の強い夕方の市街地3Dビュー - 100m四方</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+    <script>
+        // シーンの設定
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x88BBEE); // 夕方の空色
         
-        const subRoadEW = new THREE.Mesh(
-          new THREE.PlaneGeometry(500, 15),
-          new THREE.MeshLambertMaterial({ color: 0x666666 })
-        );
-        subRoadEW.rotation.x = -Math.PI / 2;
-        subRoadEW.position.y = 0.1;
-        subRoadEW.position.z = i * 100;
-        subRoadEW.receiveShadow = true;
-        scene.add(subRoadEW);
-      }
-      
-      // サブ道路（南北方向に3本）
-      for (let i = -1; i <= 1; i++) {
-        if (i === 0) continue; // メイン道路と重複する位置はスキップ
+        // カメラの設定
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(50, 30, 100);
+        camera.lookAt(50, 0, 50);
         
-        const subRoadNS = new THREE.Mesh(
-          new THREE.PlaneGeometry(15, 500),
-          new THREE.MeshLambertMaterial({ color: 0x666666 })
-        );
-        subRoadNS.rotation.x = -Math.PI / 2;
-        subRoadNS.position.y = 0.1;
-        subRoadNS.position.x = i * 100;
-        subRoadNS.receiveShadow = true;
-        scene.add(subRoadNS);
-      }
-      
-      // 歩道（メイン道路沿い）
-      const sidewalkMaterial = new THREE.MeshLambertMaterial({ color: 0xCCCCCC });
-      
-      // 東西メイン道路の歩道
-      for (let side = -1; side <= 1; side += 2) {
-        const sidewalkEW = new THREE.Mesh(
-          new THREE.PlaneGeometry(500, 5),
-          sidewalkMaterial
-        );
-        sidewalkEW.rotation.x = -Math.PI / 2;
-        sidewalkEW.position.y = 0.15;
-        sidewalkEW.position.z = side * 12.5;
-        sidewalkEW.receiveShadow = true;
-        scene.add(sidewalkEW);
-      }
-      
-      // 南北メイン道路の歩道
-      for (let side = -1; side <= 1; side += 2) {
-        const sidewalkNS = new THREE.Mesh(
-          new THREE.PlaneGeometry(5, 500),
-          sidewalkMaterial
-        );
-        sidewalkNS.rotation.x = -Math.PI / 2;
-        sidewalkNS.position.y = 0.15;
-        sidewalkNS.position.x = side * 12.5;
-        sidewalkNS.receiveShadow = true;
-        scene.add(sidewalkNS);
-      }
-      
-      // 横断歩道の追加
-      createCrosswalk(0, 20, "EW"); // メイン交差点の南側
-      createCrosswalk(0, -20, "EW"); // メイン交差点の北側
-      createCrosswalk(20, 0, "NS"); // メイン交差点の東側
-      createCrosswalk(-20, 0, "NS"); // メイン交差点の西側
-      
-      // サブ交差点にも横断歩道を追加
-      for (let x = -100; x <= 100; x += 100) {
-        if (x === 0) continue;
-        for (let z = -100; z <= 100; z += 100) {
-          if (z === 0) continue;
-          createCrosswalk(x, z + 10, "EW");
-          createCrosswalk(x, z - 10, "EW");
-          createCrosswalk(x + 10, z, "NS");
-          createCrosswalk(x - 10, z, "NS");
-        }
-      }
-    }
-    
-    // 横断歩道を作成する関数
-    function createCrosswalk(x, z, direction) {
-      const width = direction === "EW" ? 15 : 4;
-      const height = direction === "EW" ? 4 : 15;
-      
-      for (let i = 0; i < 5; i++) {
-        const offset = (i - 2) * 2;
-        const stripeX = direction === "EW" ? x : x + offset;
-        const stripeZ = direction === "EW" ? z + offset : z;
+        // レンダラーの設定
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
         
-        const stripe = new THREE.Mesh(
-          new THREE.PlaneGeometry(width, height),
-          new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
-        );
-        stripe.rotation.x = -Math.PI / 2;
-        stripe.position.set(stripeX, 0.16, stripeZ);
-        stripe.receiveShadow = true;
-        scene.add(stripe);
-      }
-    }
-    
-    // 信号機を作成する関数
-    function createTrafficLight(x, z) {
-      const pole = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.3, 0.3, 7, 8),
-        new THREE.MeshLambertMaterial({ color: 0x333333 })
-      );
-      pole.position.set(x, 3.5, z);
-      pole.castShadow = true;
-      scene.add(pole);
-      
-      const head = new THREE.Mesh(
-        new THREE.BoxGeometry(1, 3, 1),
-        new THREE.MeshLambertMaterial({ color: 0x222222 })
-      );
-      head.position.set(x, 7, z);
-      head.castShadow = true;
-      scene.add(head);
-      
-      // 信号のライト
-      const colors = [0xFF0000, 0xFFFF00, 0x00FF00];
-      for (let i = 0; i < 3; i++) {
-        const light = new THREE.Mesh(
-          new THREE.CircleGeometry(0.3, 16),
-          new THREE.MeshBasicMaterial({ color: colors[i] })
-        );
-        light.position.set(x, 6 + i, z + 0.51);
-        light.rotation.y = Math.PI;
-        scene.add(light);
-      }
-    }
-    
-    // 街灯を作成する関数
-    function createStreetLight(x, z) {
-      const pole = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.2, 0.3, 8, 8),
-        new THREE.MeshLambertMaterial({ color: 0x333333 })
-      );
-      pole.position.set(x, 4, z);
-      pole.castShadow = true;
-      scene.add(pole);
-      
-      const arm = new THREE.Mesh(
-        new THREE.BoxGeometry(3, 0.2, 0.2),
-        new THREE.MeshLambertMaterial({ color: 0x333333 })
-      );
-      arm.position.set(x + 1.5, 8, z);
-      arm.castShadow = true;
-      scene.add(arm);
-      
-      const lamp = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.5, 0.8, 1, 8),
-        new THREE.MeshBasicMaterial({ color: 0xFFFF99, transparent: true, opacity: 0.8 })
-      );
-      lamp.rotation.x = Math.PI / 2;
-      lamp.position.set(x + 3, 7.8, z);
-      scene.add(lamp);
-      
-      // 街灯の光源
-      const light = new THREE.PointLight(0xFFFFCC, 1, 30);
-      light.position.set(x + 3, 7.5, z);
-      light.castShadow = true;
-      light.shadow.mapSize.width = 512;
-      light.shadow.mapSize.height = 512;
-      scene.add(light);
-    }
-    
-    // 街路樹を作成する関数
-    function createTree(x, z) {
-      const trunk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.5, 0.7, 4, 8),
-        new THREE.MeshLambertMaterial({ color: 0x8B4513 })
-      );
-      trunk.position.set(x, 2, z);
-      trunk.castShadow = true;
-      scene.add(trunk);
-      
-      const leaves = new THREE.Mesh(
-        new THREE.SphereGeometry(3, 16, 16),
-        new THREE.MeshLambertMaterial({ color: 0x228B22 })
-      );
-      leaves.position.set(x, 6, z);
-      leaves.castShadow = true;
-      scene.add(leaves);
-    }
-    
-    // 建物を配置する関数
-    function placeBuildings() {
-      const gridSize = 50; // グリッドの大きさ
-      const buildingSpots = [];
-      
-      // 道路を避けるための条件
-      function isNearRoad(x, z) {
-        // メインロード付近
-        if (Math.abs(x) < 20 || Math.abs(z) < 20) return true;
+        // 西陽の設定（夕方の太陽）
+        const sunLight = new THREE.DirectionalLight(0xFFAA33, 1);
+        sunLight.position.set(-50, 30, 20); // 西側から差し込む光
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 500;
+        sunLight.shadow.camera.left = -100;
+        sunLight.shadow.camera.right = 100;
+        sunLight.shadow.camera.top = 100;
+        sunLight.shadow.camera.bottom = -100;
+        scene.add(sunLight);
         
-        // サブロード付近
-        for (let i = -100; i <= 100; i += 100) {
-          if (Math.abs(x - i) < 15 || Math.abs(z - i) < 15) return true;
+        // 環境光（全体的な明るさ）
+        const ambientLight = new THREE.AmbientLight(0x404050, 0.5);
+        scene.add(ambientLight);
+        
+        // 道路の作成（十字路を表現）
+        function createRoads() {
+            // 地面（ベース）
+            const groundGeometry = new THREE.PlaneGeometry(100, 100);
+            const groundMaterial = new THREE.MeshPhongMaterial({ color: 0x93C572, side: THREE.DoubleSide });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.set(50, 0, 50);
+            ground.receiveShadow = true;
+            scene.add(ground);
+            
+            // 南北の道路
+            const northSouthRoadGeometry = new THREE.PlaneGeometry(15, 100);
+            const roadMaterial = new THREE.MeshPhongMaterial({ color: 0x333333, side: THREE.DoubleSide });
+            const northSouthRoad = new THREE.Mesh(northSouthRoadGeometry, roadMaterial);
+            northSouthRoad.rotation.x = -Math.PI / 2;
+            northSouthRoad.position.set(50, 0.01, 50);
+            northSouthRoad.receiveShadow = true;
+            scene.add(northSouthRoad);
+            
+            // 東西の道路
+            const eastWestRoadGeometry = new THREE.PlaneGeometry(100, 15);
+            const eastWestRoad = new THREE.Mesh(eastWestRoadGeometry, roadMaterial);
+            eastWestRoad.rotation.x = -Math.PI / 2;
+            eastWestRoad.position.set(50, 0.01, 50);
+            eastWestRoad.receiveShadow = true;
+            scene.add(eastWestRoad);
+            
+            // 歩道（四角形の外周）
+            createSidewalk(50, 0.1, 50, 100, 2, 100);  // 南側
+            createSidewalk(50, 0.1, 0, 100, 2, 0);     // 北側
+            createSidewalk(0, 0.1, 50, 0, 2, 100);     // 西側
+            createSidewalk(100, 0.1, 50, 0, 2, 100);   // 東側
+            
+            // 内側の歩道（十字路に沿って）
+            // 南北道路に沿った歩道
+            createSidewalk(43, 0.1, 50, 2, 0.2, 100);  // 西側
+            createSidewalk(57, 0.1, 50, 2, 0.2, 100);  // 東側
+            
+            // 東西道路に沿った歩道
+            createSidewalk(50, 0.1, 43, 100, 0.2, 2);  // 北側
+            createSidewalk(50, 0.1, 57, 100, 0.2, 2);  // 南側
+            
+            // 道路標示（中央線）
+            createRoadMarkings();
+            
+            // 横断歩道
+            createCrosswalks();
         }
         
-        return false;
-      }
-      
-      // 建物の配置場所を決定
-      for (let x = -225; x <= 225; x += gridSize) {
-        for (let z = -225; z <= 225; z += gridSize) {
-          // 道路や交差点を避ける
-          if (!isNearRoad(x, z)) {
-            // ランダムなオフセットを追加
-            const offsetX = (Math.random() - 0.5) * 10;
-            const offsetZ = (Math.random() - 0.5) * 10;
-            buildingSpots.push({
-              x: x + offsetX,
-              z: z + offsetZ,
-              type: buildingTypes[Math.floor(Math.random() * buildingTypes.length)]
+        // 歩道の作成
+        function createSidewalk(x, y, z, width, height, depth) {
+            const sidewalkGeometry = new THREE.BoxGeometry(width, height, depth);
+            const sidewalkMaterial = new THREE.MeshPhongMaterial({ color: 0x999999 });
+            const sidewalk = new THREE.Mesh(sidewalkGeometry, sidewalkMaterial);
+            sidewalk.position.set(x, y, z);
+            sidewalk.receiveShadow = true;
+            sidewalk.castShadow = true;
+            scene.add(sidewalk);
+        }
+        
+        // 道路標示（中央線など）
+        function createRoadMarkings() {
+            // 南北の道路中央線
+            const nsLineGeometry = new THREE.PlaneGeometry(0.5, 100);
+            const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide });
+            const nsLine = new THREE.Mesh(nsLineGeometry, lineMaterial);
+            nsLine.rotation.x = -Math.PI / 2;
+            nsLine.position.set(50, 0.02, 50);
+            scene.add(nsLine);
+            
+            // 東西の道路中央線
+            const ewLineGeometry = new THREE.PlaneGeometry(100, 0.5);
+            const ewLine = new THREE.Mesh(ewLineGeometry, lineMaterial);
+            ewLine.rotation.x = -Math.PI / 2;
+            ewLine.position.set(50, 0.02, 50);
+            scene.add(ewLine);
+        }
+        
+        // 横断歩道の作成
+        function createCrosswalks() {
+            // 交差点の四方に横断歩道を設置
+            createCrosswalk(42, 0.03, 42, 12, 0, 0);  // 北西
+            createCrosswalk(42, 0.03, 58, 12, 0, 0);  // 南西
+            createCrosswalk(58, 0.03, 42, 12, 0, 0);  // 北東
+            createCrosswalk(58, 0.03, 58, 12, 0, 0);  // 南東
+        }
+        
+        // 個々の横断歩道
+        function createCrosswalk(x, y, z, width, xRot, zRot) {
+            const group = new THREE.Group();
+            const stripeWidth = 1;
+            const stripeGap = 0.5;
+            const stripeCount = Math.floor(width / (stripeWidth + stripeGap));
+            
+            for (let i = 0; i < stripeCount; i++) {
+                const stripeGeometry = new THREE.PlaneGeometry(stripeWidth, 6);
+                const stripeMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide });
+                const stripe = new THREE.Mesh(stripeGeometry, stripeMaterial);
+                stripe.rotation.x = -Math.PI / 2;
+                
+                const offset = i * (stripeWidth + stripeGap) - width / 2 + stripeWidth / 2;
+                stripe.position.set(offset, 0, 0);
+                
+                group.add(stripe);
+            }
+            
+            group.position.set(x, y, z);
+            group.rotation.y = zRot;
+            scene.add(group);
+        }
+        
+        // 建物の種類を定義
+        const buildingTypes = [
+            { width: 15, height: 30, depth: 15, color: 0xCC8866 },  // 高いマンション
+            { width: 20, height: 15, depth: 20, color: 0xAAAAAA },  // オフィスビル
+            { width: 10, height: 8, depth: 10, color: 0x88CC99 },   // 住宅
+            { width: 12, height: 12, depth: 12, color: 0x9988AA },  // 店舗
+        ];
+        
+        // 建物の配置
+        function placeBuildings() {
+            // 四つのブロックに分けて建物を配置
+            placeBlockBuildings(25, 25, 4);  // 北西ブロック
+            placeBlockBuildings(75, 25, 4);  // 北東ブロック
+            placeBlockBuildings(25, 75, 4);  // 南西ブロック
+            placeBlockBuildings(75, 75, 4);  // 南東ブロック
+        }
+        
+        // ブロック内に建物を配置
+        function placeBlockBuildings(blockX, blockZ, count) {
+            for (let i = 0; i < count; i++) {
+                const type = buildingTypes[Math.floor(Math.random() * buildingTypes.length)];
+                const x = blockX + (Math.random() - 0.5) * 30;
+                const z = blockZ + (Math.random() - 0.5) * 30;
+                
+                // 道路や他の建物と重ならないようにする
+                if (Math.abs(x - 50) < 10 || Math.abs(z - 50) < 10) continue;
+                if (x < 5 || x > 95 || z < 5 || z > 95) continue;
+                
+                createBuilding(x, 0, z, type.width, type.height, type.depth, type.color);
+            }
+        }
+        
+        // 個々の建物の作成
+        function createBuilding(x, y, z, width, height, depth, color) {
+            const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
+            const buildingMaterial = new THREE.MeshPhongMaterial({ color: color });
+            const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+            building.position.set(x, y + height / 2, z);
+            building.castShadow = true;
+            building.receiveShadow = true;
+            scene.add(building);
+            
+            // 建物の窓を追加
+            addWindowsToBuilding(building, width, height, depth);
+        }
+        
+        // 建物に窓を追加
+        function addWindowsToBuilding(building, width, height, depth) {
+            const windowSize = 1.5;
+            const windowSpacing = 3;
+            const windowGeometry = new THREE.PlaneGeometry(windowSize, windowSize);
+            const windowMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xFFFF99, 
+                emissive: 0x555533,
+                side: THREE.DoubleSide
             });
-          }
-        }
-      }
-      
-      // 建物の生成と配置
-      buildingSpots.forEach(spot => {
-        const { x, z, type } = spot;
-        const geometry = type.geometry(x, z);
-        const material = type.material();
-        const building = new THREE.Mesh(geometry, material);
-        
-        // 建物の位置を設定（高さの半分を上に）
-        building.position.set(x, geometry.parameters.height / 2, z);
-        building.castShadow = true;
-        building.receiveShadow = true;
-        scene.add(building);
-      });
-    }
-    
-    // 街灯と信号機の配置
-    function placeStreetFurniture() {
-      // メイン交差点に信号機を配置
-      createTrafficLight(12, 12);
-      createTrafficLight(-12, 12);
-      createTrafficLight(-12, -12);
-      createTrafficLight(12, -12);
-      
-      // サブ交差点にも信号機を配置
-      for (let x = -100; x <= 100; x += 100) {
-        if (x === 0) continue;
-        for (let z = -100; z <= 100; z += 100) {
-          if (z === 0) continue;
-          createTrafficLight(x + 7, z + 7);
-          createTrafficLight(x - 7, z + 7);
-          createTrafficLight(x - 7, z - 7);
-          createTrafficLight(x + 7, z - 7);
-        }
-      }
-      
-      // 街灯の配置（メイン道路）
-      for (let pos = -240; pos <= 240; pos += 40) {
-        // 東西道路
-        createStreetLight(pos, 15);
-        createStreetLight(pos, -15);
-        
-        // 南北道路
-        createStreetLight(15, pos);
-        createStreetLight(-15, pos);
-      }
-      
-      // 街路樹の配置
-      for (let pos = -220; pos <= 220; pos += 20) {
-        // 交差点を避ける
-        if (Math.abs(pos) < 30 || (Math.abs(pos - 100) < 30) || (Math.abs(pos + 100) < 30)) continue;
-        
-        // 東西メイン道路
-        createTree(pos, 17);
-        createTree(pos, -17);
-        
-        // 南北メイン道路
-        createTree(17, pos);
-        createTree(-17, pos);
-      }
-    }
-    
-    // 車を作成する関数
-    function createCar(color) {
-      const car = new THREE.Group();
-      
-      // 車体
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(5, 1.5, 2.5),
-        new THREE.MeshLambertMaterial({ color: color })
-      );
-      body.position.y = 1;
-      body.castShadow = true;
-      car.add(body);
-      
-      // 上部
-      const top = new THREE.Mesh(
-        new THREE.BoxGeometry(3, 1, 2),
-        new THREE.MeshLambertMaterial({ color: color })
-      );
-      top.position.set(-0.5, 2.25, 0);
-      top.castShadow = true;
-      car.add(top);
-      
-      // ヘッドライト
-      for (let i = -1; i <= 1; i += 2) {
-        const headlight = new THREE.Mesh(
-          new THREE.BoxGeometry(0.1, 0.5, 0.5),
-          new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
-        );
-        headlight.position.set(2.55, 1, i * 0.8);
-        car.add(headlight);
-        
-        // テールライト
-        const taillight = new THREE.Mesh(
-          new THREE.BoxGeometry(0.1, 0.5, 0.5),
-          new THREE.MeshBasicMaterial({ color: 0xFF0000 })
-        );
-        taillight.position.set(-2.55, 1, i * 0.8);
-        car.add(taillight);
-      }
-      
-      // タイヤ
-      const wheelPositions = [
-        { x: 1.5, y: 0.4, z: 1.5 },
-        { x: 1.5, y: 0.4, z: -1.5 },
-        { x: -1.5, y: 0.4, z: 1.5 },
-        { x: -1.5, y: 0.4, z: -1.5 }
-      ];
-      
-      wheelPositions.forEach(pos => {
-        const wheel = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.5, 0.5, 0.5, 16),
-          new THREE.MeshLambertMaterial({ color: 0x111111 })
-        );
-        wheel.rotation.z = Math.PI / 2;
-        wheel.position.set(pos.x, pos.y, pos.z);
-        car.add(wheel);
-      });
-      
-      return car;
-    }
-    
-    // トラフィックシステム
-    const traffic = [];
-    function createTraffic() {
-      const carColors = [0xFF0000, 0x00FF00, 0x0000FF, 0xFFFF00, 0xFFFFFF, 0x00FFFF, 0x000000, 0x999999];
-      
-      // 東西方向の道路に車を配置
-      for (let z = -100; z <= 100; z += 100) {
-        for (let x = -200; x < 200; x += 30) {
-          if (Math.random() < 0.7) { // 70%の確率で車を配置
-            const randomColor = carColors[Math.floor(Math.random() * carColors.length)];
-            const car = createCar(randomColor);
             
-            // 東向き車線
-            if (Math.random() < 0.5) {
-              car.position.set(x, 0, z + 3);
-              car.rotation.y = 0;
-            } 
-            // 西向き車線
-            else {
-              car.position.set(x, 0, z - 3);
-              car.rotation.y = Math.PI;
-            }
+            // 建物の各面に窓を配置
+            const sides = [
+                { dir: 'front', rot: [0, 0, 0], pos: [0, 0, depth/2 + 0.01] },
+                { dir: 'back', rot: [0, Math.PI, 0], pos: [0, 0, -depth/2 - 0.01] },
+                { dir: 'left', rot: [0, Math.PI/2, 0], pos: [width/2 + 0.01, 0, 0] },
+                { dir: 'right', rot: [0, -Math.PI/2, 0], pos: [-width/2 - 0.01, 0, 0] }
+            ];
             
-            scene.add(car);
-            
-            // 速度をランダムに設定
-            const speed = 0.1 + Math.random() * 0.3;
-            traffic.push({
-              object: car,
-              speed: speed,
-              direction: car.rotation.y === 0 ? "east" : "west"
+            sides.forEach(side => {
+                const windowCountH = Math.floor(width / windowSpacing) - 1;
+                const windowCountV = Math.floor(height / windowSpacing) - 1;
+                
+                for (let i = 0; i < windowCountH; i++) {
+                    for (let j = 0; j < windowCountV; j++) {
+                        const window = new THREE.Mesh(windowGeometry, windowMaterial);
+                        const x = (i - (windowCountH - 1) / 2) * windowSpacing;
+                        const y = (j - (windowCountV - 1) / 2) * windowSpacing + height/4;
+                        
+                        window.position.set(
+                            side.pos[0] + (side.dir === 'left' || side.dir === 'right' ? 0 : x),
+                            side.pos[1] + y,
+                            side.pos[2] + (side.dir === 'front' || side.dir === 'back' ? 0 : x)
+                        );
+                        window.rotation.set(side.rot[0], side.rot[1], side.rot[2]);
+                        building.add(window);
+                    }
+                }
             });
-          }
         }
-      }
-      
-      // 南北方向の道路に車を配置
-      for (let x = -100; x <= 100; x += 100) {
-        for (let z = -200; z < 200; z += 30) {
-          if (Math.random() < 0.7) { // 70%の確率で車を配置
-            const randomColor = carColors[Math.floor(Math.random() * carColors.length)];
-            const car = createCar(randomColor);
-            
-            // 南向き車線
-            if (Math.random() < 0.5) {
-              car.position.set(x + 3, 0, z);
-              car.rotation.y = Math.PI / 2;
-            } 
-            // 北向き車線
-            else {
-              car.position.set(x - 3, 0, z);
-              car.rotation.y = -Math.PI / 2;
-            }
-            
-            scene.add(car);
-            
-            // 速度をランダムに設定
-            const speed = 0.1 + Math.random() * 0.3;
-            traffic.push({
-              object: car,
-              speed: speed,
-              direction: car.rotation.y === Math.PI / 2 ? "south" : "north"
-            });
-          }
-        }
-      }
-      
-      // プレイヤー用の車（赤色、最初はオフ）
-      playerCar = createCar(0xFF0000);
-      playerCar.position.set(0, 0, 7);
-      playerCar.visible = false;
-      scene.add(playerCar);
-    }
-    
-    // 都市の初期化
-    function initCity() {
-      createRoads();
-      placeBuildings();
-      placeStreetFurniture();
-      createTraffic();
-    }
-    
-    // 都市の初期化を実行
-    initCity();
-    
-    // トラフィックの更新
-    function updateTraffic() {
-      traffic.forEach(car => {
-        const { object, speed, direction } = car;
         
-        switch (direction) {
-          case "east":
-            object.position.x += speed;
-            // 境界チェック
-            if (object.position.x > 250) {
-              object.position.x = -250;
+        // 街路樹の作成
+        function createStreetTrees() {
+            // 道路沿いに街路樹を配置
+            for (let i = 0; i < 10; i++) {
+                // 南北の道路沿い
+                createTree(40, 0, 10 + i * 9, 1.5, 5);
+                createTree(60, 0, 10 + i * 9, 1.5, 5);
+                
+                // 東西の道路沿い
+                createTree(10 + i * 9, 0, 40, 1.5, 5);
+                createTree(10 + i * 9, 0, 60, 1.5, 5);
             }
-            break;
-          case "west":
-            object.position.x -= speed;
-            if (object.position.x < -250) {
-              object.position.x = 250;
-            }
-            break;
-          case "north":
-            object.position.z -= speed;
-            if (object.position.z < -250) {
-              object.position.z = 250;
-            }
-            break;
-          case "south":
-            object.position.z += speed;
-            if (object.position.z > 250) {
-              object.position.z = -250;
-            }
-            break;
         }
-      });
-    }
-    
-    // ウィンドウリサイズ対応
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-    
-    // ドライブモード用の変数
-    let isDriving = false;
-    let playerCar;
-    let drivingSpeed = 0;
-    let drivingRotation = 0;
-    let cameraMode = "thirdPerson"; // "firstPerson" または "thirdPerson"
-    
-    // キー操作
-    const keys = {};
-    window.addEventListener('keydown', (e) => {
-      keys[e.key] = true;
-    });
-    
-    window.addEventListener('keyup', (e) => {
-      keys[e.key] = false;
-    });
-    
-    // ドライブモード切替ボタン
-    document.getElementById('toggleDrive').addEventListener('click', () => {
-      isDriving = !isDriving;
-      document.getElementById('toggleDrive').textContent = `ドライブモード: ${isDriving ? 'ON' : 'OFF'}`;
-      
-      if (isDriving) {
-        playerCar.visible = true;
-        // ドライブモード開始時のカメラ位置
-        updateDriveCamera();
-      } else {
-        playerCar.visible = false;
-        // 通常モードのカメラ位置に戻す
-        camera.position.set(100, 50, 100);
-        camera.lookAt(0, 0, 0);
-      }
-    });
-    
-    // 視点切替ボタン
-    document.getElementById('toggleView').addEventListener('click', () => {
-      if (isDriving) {
-        cameraMode = cameraMode === "thirdPerson" ? "firstPerson" : "thirdPerson";
-        updateDriveCamera();
-      }
-    });
-    
-    // ドライブモードのカメラ更新
-    function updateDriveCamera() {
-      if (cameraMode === "firstPerson") {
-        // 一人称視点（車内から）
-        camera.position.x = playerCar.position.x - 2 * Math.sin(playerCar.rotation.y);
-        camera.position.y = playerCar.position.y + 2;
-        camera.position.z = playerCar.position.z - 2 * Math.cos(playerCar.rotation.y);
-        camera.lookAt(
-          playerCar.position.x + 10 * Math.sin(playerCar.rotation.y),
-          playerCar.position.y + 1,
-          playerCar.position.z + 10 * Math.cos(playerCar.rotation.y)
-        );
-      } else {
-        // 三人称視点（車の後ろから）
-        camera.position.x = playerCar.position.x - 10 * Math.sin(playerCar.rotation.y);
-        camera.position.y = playerCar.position.y + 5;
-        camera.position.z = playerCar.position.z - 10 * Math.cos(playerCar.rotation.y);
-        camera.lookAt(playerCar.position);
-      }
-    }
-    
-    // ドライブモードの操作更新
-    function updateDriving() {
-      if (!isDriving) return;
-      
-      // 加速と
+        
+        // 個々の木の作成
+        function createTree(x, y, z, trunkRadius, treeHeight) {
+            // 木の幹
+            const trunkGeometry = new THREE.CylinderGeometry(trunkRadius * 0.7, trunkRadius, treeHeight * 0.4, 8);
+            const trunkMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 });
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+            trunk.position.set(x, y + treeHeight * 0.2, z);
+            trunk.castShadow = true;
+            trunk.receiveShadow = true;
+            scene.add(trunk);
+            
+            // 木の葉
+            const leavesGeometry = new THREE.SphereGeometry(treeHeight * 0.6, 8, 8);
+            const leavesMaterial = new THREE.MeshPhongMaterial({ color: 0x228B22 });
+            const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+            leaves.position.set(x, y + treeHeight * 0.8, z);
+            leaves.castShadow = true;
+            leaves.receiveShadow = true;
+            scene.add(leaves);
+        }
+        
+        // 街灯の作成
+        function createStreetlights() {
+            // 交差点の四隅に街灯を配置
+            createStreetlight(40, 0, 40);
+            createStreetlight(60, 0, 40);
+            createStreetlight(40, 0, 60);
+            createStreetlight(60, 0, 60);
+            
+            // 道路沿いに街灯を配置
+            for (let i = 0; i < 5; i++) {
+                // 南北道路
+                createStreetlight(40, 0, 15 + i * 15);
+                createStreetlight(60, 0, 15 + i * 15);
+                
+                // 東西道路
+                createStreetlight(15 + i * 15, 0, 40);
+                createStreetlight(15 + i * 15, 0, 60);
+            }
+        }
+        
+        // 個々の街灯の作成
+        function createStreetlight(x, y, z) {
+            const poleHeight = 10;
+            
+            // 街灯の支柱
+            const poleGeometry = new THREE.CylinderGeometry(0.3, 0.3, poleHeight, 8);
+            const poleMaterial = new THREE.MeshPhongMaterial({ color: 0x999999 });
+            const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+            pole.position.set(x, y + poleHeight / 2, z);
+            pole.castShadow = true;
+            pole.receiveShadow = true;
+            scene.add(pole);
+            
+            // 街灯の頭部
+            const headGeometry = new THREE.BoxGeometry(1.5, 0.8, 1.5);
+            const headMaterial = new THREE.MeshPhongMaterial({ color: 0x666666 });
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            head.position.set(x, y + poleHeight + 0.4, z);
+            head.castShadow = true;
+            head.receiveShadow = true;
+            scene.add(head);
+            
+            // 街灯の光
+            const light = new THREE.PointLight(0xFFDD88, 0.8, 20);
+            light.position.set(x, y + poleHeight + 0.4, z);
+            scene.add(light);
+        }
+        
+        // 信号機の作成
+        function createTrafficLights() {
+            // 交差点の各進入路に信号機を配置
+            createTrafficLight(45, 0, 38, Math.PI / 2);  // 北向き
+            createTrafficLight(45, 0, 62, -Math.PI / 2); // 南向き
+            createTrafficLight(38, 0, 55, Math.PI);      // 西向き
+            createTrafficLight(62, 0, 55, 0);            // 東向き
+        }
+        
+        // 個々の信号機の作成
+        function createTrafficLight(x, y, z, rotation) {
+            const poleHeight = 8;
+            
+            // 信号機の支柱
+            const poleGeometry = new THREE.CylinderGeometry(0.2, 0.2, poleHeight, 8);
+            const poleMaterial = new THREE.MeshPhongMaterial({ color: 0x999999 });
+            const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+            pole.position.set(x, y + poleHeight / 2, z);
+            pole.castShadow = true;
+            pole.receiveShadow = true;
+            scene.add(pole);
+            
+            // 信号機本体
+            const bodyGeometry = new THREE.BoxGeometry(1, 3, 1);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.set(x, y + poleHeight, z);
+            body.castShadow = true;
+            body.receiveShadow = true;
+            scene.add(body);
+            
+            // 信号の向きを設定
+            body.rotation.y = rotation;
+            
+            // 信号の光（赤・黄・青）
+            const colors = [0xFF0000, 0xFFFF00, 0x00FF00];
+            for (let i = 0; i < 3; i++) {
+                const lightGeometry = new THREE.CircleGeometry(0.3, 16);
+                const lightMaterial = new THREE.MeshBasicMaterial({ color: colors[i] });
+                const light = new THREE.Mesh(lightGeometry, lightMaterial);
+                light.position.set(0, 1 - i, 0.51);
+                light.rotation.y = Math.PI;
+                body.add(light);
+            }
+        }
+        
+        // 車の作成と運動
+        function createCars() {
+            // 南北道路の車
+            for (let i = 0; i < 3; i++) {
+                createCar(47, 1, 5 + i * 30, 0, 0.15);     // 北向き
+                createCar(53, 1, 95 - i * 30, Math.PI, 0.2); // 南向き
+            }
+            
+            // 東西道路の車
+            for (let i = 0; i < 3; i++) {
+                createCar(5 + i * 30, 1, 47, Math.PI / 2, 0.18);   // 東向き
+                createCar(95 - i * 30, 1, 53, -Math.PI / 2, 0.16); // 西向き
+            }
+        }
+        
+        // 個々の車の作成
+        function createCar(x, y, z, rotation, speed) {
+            // 車のボディ
+            const bodyGeometry = new THREE.BoxGeometry(2, 1, 4);
+            
+            // ランダムな車の色
+            const colors = [0xFF0000, 0x0000FF, 0xFFFFFF, 0x00FF00, 0xFFFF00, 0x000000];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: color });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.set(x, y + 0.5, z);
+            body.rotation.y = rotation;
+            body.castShadow = true;
+            body.receiveShadow = true;
+            scene.add(body);
+            
+            // 車のルーフ
+            const roofGeometry = new THREE.BoxGeometry(1.8, 0.8, 2);
+            const roofMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+            const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+            roof.position.set(0, 0.9, -0.5);
+            roof.castShadow = true;
+            roof.receiveShadow = true;
+            body.add(roof);
+            
+            // 車のヘッドライト
+            const headlightGeometry = new THREE.CircleGeometry(0.3, 16);
+            const headlightMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFAA });
+            
+            // 前のヘッドライト
+            const frontLightLeft = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            frontLightLeft.position.set(0.5, 0, 2.01);
+            frontLightLeft.rotation.y = Math.PI;
+            body.add(frontLightLeft);
+            
+            const frontLightRight = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            frontLightRight.position.set(-0.5, 0, 2.01);
+            frontLightRight.rotation.y = Math.PI;
+            body.add(frontLightRight);
+            
+            // 後部ライト
+            const tailLightMaterial = new THREE.MeshBasicMaterial({ color: 0xFF0000 });
+            
+            const tailLightLeft = new THREE.Mesh(headlightGeometry, tailLightMaterial);
+            tailLightLeft.position.set(0.5, 0, -2.01);
+            body.add(tailLightLeft);
+            
+            const tailLightRight = new THREE.Mesh(headlightGeometry, tailLightMaterial);
+            tailLightRight.position.set(-0.5, 0, -2.01);
+            body.add(tailLightRight);
+            
+            // 車の移動のためのデータ
+            body.userData = {
+                speed: speed,
+                rotation: rotation,
+                initialPosition: { x: x, y: y + 0.5, z: z }
+            };
+            
+            // 車の配列に追加
+            cars.push(body);
+        }
+        
+        // 車の配列
+        const cars = [];
+        
+        // 車を動かす
+        function moveCars() {
+            cars.forEach(car => {
+                const userData = car.userData;
+                
+                switch (userData.rotation) {
+                    case 0: // 東向き
+                        car.position.x += userData.speed;
+                        if (car.position.x > 100) car.position.x = 0;
+                        break;
+                    case Math.PI: // 西向き
+                        car.position.x -= userData.speed;
+                        if (car.position.x < 0) car.position.x = 100;
+                        break;
+                    case Math.PI / 2: // 南向き
+                        car.position.z += userData.speed;
+                        if (car.position.z > 100) car.position.z = 0;
+                        break;
+                    case -Math.PI / 2: // 北向き
+                        car.position.z -= userData.speed;
+                        if (car.position.z < 0) car.position.z = 100;
+                        break;
+                }
+                
+                // 交差点での一時停止（単純化）
+                const distToCenter = Math.sqrt(
+                    Math.pow(car.position.x - 50, 2) + 
+                    Math.pow(car.position.z - 50, 2)
+                );
+                
+                if (distToCenter < 15 && distToCenter > 10) {
+                    // 交差点に接近すると減速
+                    car.userData.speed *= 0.99;
+                } else if (distToCenter <= 10) {
+                    // 交差点を通過したら元の速度に戻る
+                    car.userData.speed = userData.initialSpeed || 0.2;
+                }
+            });
+        }
+        
+        // 初期化関数
+        function init() {
+            createRoads();
+            placeBuildings();
+            createStreetTrees();
+            createStreetlights();
+            createTrafficLights();
+            createCars();
+            
+            // OrbitControlsの代わりにカメラの動きを制御
+            let angle = 0;
+            let cameraHeight = 30;
+            let cameraRadius = 80;
+            
+            // アニメーションループ
+            function animate() {
+                requestAnimationFrame(animate);
+                
+                // カメラを回転させる
+                angle += 0.002;
+                camera.position.x = 50 + Math.cos(angle) * cameraRadius;
+                camera.position.z = 50 + Math.sin(angle) * cameraRadius;
+                camera.position.y = cameraHeight;
+                camera.lookAt(50, 0, 50);
+                
+                // 車を動かす
+                moveCars();
+                
+                renderer.render(scene, camera);
+            }
+            
+            animate();
+        }
+        
+        // ウィンドウのリサイズ対応
+        window.addEventListener('resize', function() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // 初期化実行
+        init();
+    </script>
+</body>
+</html>
