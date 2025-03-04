@@ -3,381 +3,206 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>リアルタイム顔特徴点検出 - TensorFlow.js版</title>
+    <title>リアルタイム顔特徴点検出</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/face-api.min.js"></script>
     <style>
         body {
-            font-family: 'Arial', sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
             display: flex;
             flex-direction: column;
+            justify-content: center;
             align-items: center;
-            background-color: #f5f5f5;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f0f0;
         }
         .container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background-color: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-            width: 100%;
-            max-width: 680px;
-        }
-        #videoContainer {
             position: relative;
-            margin-bottom: 20px;
-            width: 100%;
-            max-width: 640px;
+            margin: 20px;
         }
         #video {
-            transform: scaleX(-1);
-            width: 100%;
-            max-width: 640px;
-            border-radius: 8px;
-            background-color: #000;
+            width: 640px;
+            height: 480px;
+            border-radius: 10px;
+            object-fit: cover;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
-        #canvas {
+        #overlay {
             position: absolute;
             top: 0;
             left: 0;
-            transform: scaleX(-1);
-            width: 100%;
-        }
-        #info {
-            margin-top: 10px;
-            padding: 15px;
-            background-color: #e9f7fe;
-            border-radius: 5px;
-            width: 100%;
+            width: 640px;
+            height: 480px;
+            z-index: 10;
         }
         .controls {
+            margin-top: 20px;
             display: flex;
-            flex-wrap: wrap;
             gap: 10px;
-            margin-bottom: 20px;
         }
         button {
             padding: 10px 20px;
-            background-color: #4285F4;
-            color: white;
             border: none;
             border-radius: 5px;
-            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
             font-size: 16px;
+            cursor: pointer;
             transition: background-color 0.3s;
         }
         button:hover {
-            background-color: #3367D6;
-        }
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
+            background-color: #45a049;
         }
         #status {
-            margin-bottom: 15px;
-            padding: 10px 15px;
-            background-color: #e6f2ff;
-            border-left: 4px solid #4285F4;
-            border-radius: 2px;
-            width: 100%;
-        }
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(66,133,244,0.3);
-            border-radius: 50%;
-            border-top-color: #4285F4;
-            animation: spin 1s ease-in-out infinite;
-            margin-right: 10px;
-            vertical-align: middle;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        .landmarks-info {
-            display: flex;
-            justify-content: space-between;
-            flex-wrap: wrap;
-        }
-        .landmarks-info div {
-            margin: 5px 0;
-            padding: 5px 10px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
+            margin-top: 10px;
+            color: #333;
+            font-size: 16px;
         }
     </style>
 </head>
 <body>
     <h1>リアルタイム顔特徴点検出</h1>
-    
     <div class="container">
-        <div id="status"><span class="loading"></span>TensorFlow.jsモデルを読み込み中...</div>
-        
-        <div id="videoContainer">
-            <video id="video" autoplay muted playsinline></video>
-            <canvas id="canvas"></canvas>
-        </div>
-        
-        <div class="controls">
-            <button id="startButton" disabled>カメラを開始</button>
-            <button id="stopButton" disabled>停止</button>
-        </div>
-        
-        <div id="info">
-            <p>カメラを起動すると、検出された顔の特徴点（顔メッシュ）が画面上に表示されます。</p>
-            <div class="landmarks-info">
-                <div>検出点数: <span id="landmarkCount">0</span> 点</div>
-                <div>FPS: <span id="fps">0</span></div>
-            </div>
-        </div>
+        <video id="video" autoplay muted></video>
+        <canvas id="overlay"></canvas>
     </div>
+    <div class="controls">
+        <button id="startButton">カメラを開始</button>
+        <button id="stopButton" disabled>停止</button>
+    </div>
+    <div id="status">モデルを読み込んでいます...</div>
 
-    <!-- TensorFlow.js と Facemesh モデルのロード -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.2.0/tf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow-models/facemesh/0.0.5/facemesh.min.js"></script>
-    
     <script>
         const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
+        const overlay = document.getElementById('overlay');
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
-        const landmarkCount = document.getElementById('landmarkCount');
-        const fpsText = document.getElementById('fps');
         const statusText = document.getElementById('status');
         
-        let stream = null;
         let isRunning = false;
-        let model = null;
-        let lastFrameTime = 0;
-        
-        // TensorFlow.jsモデルを読み込む
-        async function loadModel() {
+        let stream = null;
+
+        // キャンバスのサイズをビデオに合わせる
+        overlay.width = 640;
+        overlay.height = 480;
+
+        // FaceAPIのモデルを読み込む
+        Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri('https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/models'),
+            faceapi.nets.faceLandmark68Net.loadFromUri('https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/models')
+        ]).then(() => {
+            statusText.textContent = 'モデルの読み込みが完了しました。カメラを開始してください。';
+            startButton.disabled = false;
+        }).catch(err => {
+            statusText.textContent = 'モデルの読み込みに失敗しました: ' + err.message;
+        });
+
+        // カメラ開始ボタンのイベントリスナー
+        startButton.addEventListener('click', async () => {
             try {
-                statusText.innerHTML = '<span class="loading"></span>顔メッシュモデルを読み込み中...';
-                
-                // facemeshモデルを読み込む
-                model = await facemesh.load({
-                    maxFaces: 1, // 検出する最大顔数
-                    inputResolution: { width: 640, height: 480 },
-                    scale: 0.5 // 検出精度と速度のバランス
-                });
-                
-                console.log('FaceMeshモデルの読み込みが完了しました');
-                statusText.innerHTML = '準備完了！カメラを開始ボタンを押してください';
-                startButton.disabled = false;
-            } catch (error) {
-                console.error('モデルの読み込みに失敗しました:', error);
-                statusText.innerHTML = 'エラー: モデルの読み込みに失敗しました。ページを再読み込みしてください。<br>' 
-                    + error.message;
-            }
-        }
-        
-        // カメラを開始する
-        async function startVideo() {
-            if (!model) {
-                statusText.innerHTML = 'モデルの読み込みが完了していません。しばらくお待ちください。';
-                return;
-            }
-            
-            try {
-                statusText.innerHTML = '<span class="loading"></span>カメラにアクセス中...';
                 stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        facingMode: 'user',
-                        width: { ideal: 640 },
-                        height: { ideal: 480 }
-                    },
-                    audio: false
+                    video: {
+                        width: 640,
+                        height: 480,
+                        facingMode: 'user'
+                    }
                 });
-                
                 video.srcObject = stream;
-                video.onloadedmetadata = function() {
-                    // ビデオのサイズに合わせてキャンバスをリサイズ
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    
-                    startButton.disabled = true;
-                    stopButton.disabled = false;
-                    isRunning = true;
-                    statusText.innerHTML = 'カメラ作動中 - 顔を検出中...';
-                    requestAnimationFrame(detectFaces);
-                };
-                
-                video.play();
-            } catch (error) {
-                console.error('カメラへのアクセスに失敗しました:', error);
-                statusText.innerHTML = 'エラー: カメラへのアクセスに失敗しました。カメラの使用を許可してください。<br>' 
-                    + error.message;
+                isRunning = true;
+                startDetection();
+                startButton.disabled = true;
+                stopButton.disabled = false;
+                statusText.textContent = '顔特徴点を検出中...';
+            } catch (err) {
+                statusText.textContent = 'カメラへのアクセスに失敗しました: ' + err.message;
             }
-        }
-        
-        // カメラを停止する
-        function stopVideo() {
+        });
+
+        // 停止ボタンのイベントリスナー
+        stopButton.addEventListener('click', () => {
             if (stream) {
-                stream.getTracks().forEach(track => {
-                    track.stop();
-                });
+                stream.getTracks().forEach(track => track.stop());
                 video.srcObject = null;
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                isRunning = false;
                 startButton.disabled = false;
                 stopButton.disabled = true;
-                isRunning = false;
-                landmarkCount.textContent = '0';
-                fpsText.textContent = '0';
-                statusText.innerHTML = '停止しました。再開するには「カメラを開始」ボタンを押してください。';
-            }
-        }
-        
-        // 顔と特徴点を検出して描画する
-        async function detectFaces(timestamp) {
-            if (!isRunning) return;
-            
-            // FPSを計算
-            if (lastFrameTime) {
-                const fps = Math.round(1000 / (timestamp - lastFrameTime));
-                fpsText.textContent = fps;
-            }
-            lastFrameTime = timestamp;
-            
-            try {
-                // FaceMeshモデルで顔を検出
-                const predictions = await model.estimateFaces(video);
+                statusText.textContent = '停止しました。カメラを再開するには「カメラを開始」ボタンを押してください。';
                 
                 // キャンバスをクリア
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const ctx = overlay.getContext('2d');
+                ctx.clearRect(0, 0, overlay.width, overlay.height);
+            }
+        });
+
+        // 顔検出とランドマーク描画の関数
+        async function startDetection() {
+            if (!isRunning) return;
+
+            const detections = await faceapi.detectAllFaces(
+                video, 
+                new faceapi.TinyFaceDetectorOptions()
+            ).withFaceLandmarks();
+
+            const ctx = overlay.getContext('2d');
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+            
+            // すべての検出された顔に対して処理
+            detections.forEach(detection => {
+                // 顔の輪郭を描画
+                ctx.beginPath();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+                ctx.rect(
+                    detection.detection.box.x,
+                    detection.detection.box.y,
+                    detection.detection.box.width,
+                    detection.detection.box.height
+                );
+                ctx.stroke();
                 
-                if (predictions.length > 0) {
-                    predictions.forEach(prediction => {
-                        const keypoints = prediction.scaledMesh;
-                        
-                        // 検出された特徴点の数を表示
-                        landmarkCount.textContent = keypoints.length;
-                        
-                        // 顔の特徴点を描画
-                        ctx.fillStyle = '#FF0000';
-                        
-                        // すべての特徴点を描画
-                        for (let i = 0; i < keypoints.length; i++) {
-                            const [x, y] = keypoints[i];
-                            
-                            ctx.beginPath();
-                            ctx.arc(x, y, 1, 0, 2 * Math.PI);
-                            ctx.fill();
-                        }
-                        
-                        // 顔の輪郭を描画
-                        drawFaceMesh(ctx, keypoints);
-                    });
-                    
-                    statusText.innerHTML = `${predictions.length}人の顔を検出中 - 特徴点: ${landmarkCount.textContent}点`;
-                } else {
-                    landmarkCount.textContent = '0';
-                    statusText.innerHTML = '顔を検出できません。カメラに顔を向けてください。';
+                // 顔のランドマークを描画
+                const landmarks = detection.landmarks;
+                const positions = landmarks.positions;
+                
+                // 特徴点のグループを異なる色で描画
+                drawPointsGroup(ctx, positions.slice(0, 17), 'rgba(255, 0, 0, 0.8)');  // 顔の輪郭
+                drawPointsGroup(ctx, positions.slice(17, 27), 'rgba(0, 0, 255, 0.8)'); // 眉毛
+                drawPointsGroup(ctx, positions.slice(27, 36), 'rgba(255, 255, 0, 0.8)'); // 鼻
+                drawPointsGroup(ctx, positions.slice(36, 48), 'rgba(0, 255, 255, 0.8)'); // 目
+                drawPointsGroup(ctx, positions.slice(48, 68), 'rgba(255, 0, 255, 0.8)'); // 口
+            });
+            
+            // 次のフレームで検出を続ける
+            requestAnimationFrame(startDetection);
+        }
+
+        // 特徴点のグループを描画する関数
+        function drawPointsGroup(ctx, points, color) {
+            ctx.fillStyle = color;
+            
+            // 各点を描画
+            points.forEach(point => {
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 2, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+            
+            // 点同士を線で接続
+            if (points.length > 1) {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                
+                for (let i = 1; i < points.length; i++) {
+                    ctx.lineTo(points[i].x, points[i].y);
                 }
-            } catch (error) {
-                console.error('顔検出中にエラーが発生しました:', error);
-                statusText.innerHTML = 'エラー: 検出処理中にエラーが発生しました。<br>' + error.message;
+                
+                ctx.stroke();
             }
-            
-            // 再帰的に呼び出して連続検出
-            requestAnimationFrame(detectFaces);
         }
-        
-        // 顔メッシュの特定部位を描画する
-        function drawFaceMesh(ctx, keypoints) {
-            if (!keypoints || keypoints.length === 0) return;
-            
-            // 目の輪郭
-            const leftEyeUpper = [263, 249, 390, 373, 374, 380, 381, 382, 362];
-            const leftEyeLower = [263, 466, 388, 387, 386, 385, 384, 398, 362];
-            const rightEyeUpper = [33, 7, 163, 144, 145, 153, 154, 155, 133];
-            const rightEyeLower = [33, 246, 161, 160, 159, 158, 157, 173, 133];
-            
-            // 唇
-            const upperLip = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291];
-            const lowerLip = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291];
-            
-            // 顔の輪郭
-            const faceOval = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
-            
-            // 眉毛
-            const leftEyebrow = [276, 283, 282, 295, 285, 300, 293, 334, 296, 336];
-            const rightEyebrow = [46, 53, 52, 65, 55, 70, 63, 105, 66, 107];
-            
-            // 鼻
-            const nose = [168, 197, 5, 4, 45, 275, 440, 344, 278];
-            
-            // 各パーツを描画
-            drawPath(ctx, keypoints, leftEyeUpper, true, '#0000FF');
-            drawPath(ctx, keypoints, leftEyeLower, true, '#0000FF');
-            drawPath(ctx, keypoints, rightEyeUpper, true, '#0000FF');
-            drawPath(ctx, keypoints, rightEyeLower, true, '#0000FF');
-            
-            drawPath(ctx, keypoints, upperLip, true, '#FF00FF');
-            drawPath(ctx, keypoints, lowerLip, true, '#FF00FF');
-            
-            drawPath(ctx, keypoints, faceOval, true, '#00FF00');
-            
-            drawPath(ctx, keypoints, leftEyebrow, false, '#00FFFF');
-            drawPath(ctx, keypoints, rightEyebrow, false, '#00FFFF');
-            
-            drawPath(ctx, keypoints, nose, false, '#FFFF00');
-        }
-        
-        // 特徴点をつなげて線を描画
-        function drawPath(ctx, keypoints, indices, closePath = false, color = '#00FF00') {
-            if (!keypoints || keypoints.length === 0 || !indices || indices.length === 0) return;
-            
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            
-            const [x0, y0] = keypoints[indices[0]];
-            ctx.moveTo(x0, y0);
-            
-            for (let i = 1; i < indices.length; i++) {
-                const [x, y] = keypoints[indices[i]];
-                ctx.lineTo(x, y);
-            }
-            
-            if (closePath) {
-                ctx.closePath();
-            }
-            
-            ctx.stroke();
-        }
-        
-        // イベントリスナーの設定
-        startButton.addEventListener('click', startVideo);
-        stopButton.addEventListener('click', stopVideo);
-        
-        // ウィンドウサイズ変更時にキャンバスをリサイズ
-        window.addEventListener('resize', function() {
-            if (video.videoWidth > 0 && video.videoHeight > 0) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-            }
-        });
-        
-        // 初期化
-        document.addEventListener('DOMContentLoaded', function() {
-            // TensorFlow.jsが読み込まれているか確認
-            if (typeof tf === 'undefined' || typeof facemesh === 'undefined') {
-                statusText.innerHTML = 'エラー: TensorFlow.jsまたはFaceMeshモデルの読み込みに失敗しました。ネットワーク接続を確認してページを再読み込みしてください。';
-                return;
-            }
-            
-            loadModel();
-        });
     </script>
 </body>
 </html>
