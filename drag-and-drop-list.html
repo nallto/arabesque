@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ドラッグ&ドロップ並び替えリスト</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4CAF50, #2E7D32);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .list-container {
+            padding: 30px;
+        }
+
+        .sortable-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .list-item {
+            background: white;
+            margin: 12px 0;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            cursor: grab;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .list-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #4CAF50, #2196F3, #FF9800);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .list-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .list-item:hover::before {
+            transform: scaleX(1);
+        }
+
+        .list-item.dragging {
+            opacity: 0.7;
+            transform: rotate(2deg) scale(1.02);
+            cursor: grabbing;
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+        }
+
+        .list-item.drag-over {
+            border-color: #4CAF50;
+            background: linear-gradient(135deg, #E8F5E8, #F1F8E9);
+            transform: scale(1.02);
+        }
+
+        .item-content {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .drag-handle {
+            color: #999;
+            font-size: 1.5em;
+            cursor: grab;
+            transition: color 0.2s ease;
+        }
+
+        .drag-handle:hover {
+            color: #4CAF50;
+        }
+
+        .item-text {
+            flex: 1;
+            font-size: 1.1em;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .item-number {
+            background: linear-gradient(135deg, #4CAF50, #2E7D32);
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .console-log {
+            margin-top: 30px;
+            background: #1a1a1a;
+            border-radius: 15px;
+            padding: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+        }
+
+        .console-log h3 {
+            color: #4CAF50;
+            margin-bottom: 10px;
+            font-size: 1em;
+        }
+
+        .log-entry {
+            color: #00ff00;
+            font-size: 0.9em;
+            margin: 5px 0;
+            padding: 2px 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .instructions {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4CAF50;
+        }
+
+        .instructions h3 {
+            color: #2E7D32;
+            margin-bottom: 10px;
+        }
+
+        .instructions p {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+            
+            .header {
+                padding: 20px;
+            }
+            
+            .list-container {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 ドラッグ&ドロップリスト</h1>
+            <p>アイテムをドラッグして順序を変更できます</p>
+        </div>
+        
+        <div class="list-container">
+            <div class="instructions">
+                <h3>📋 使用方法</h3>
+                <p>リストアイテムをドラッグして順序を変更してください。ドラッグイベントはコンソールログで確認できます。ブラウザの開発者ツール（F12）でも詳細なログを見ることができます。</p>
+            </div>
+
+            <ul class="sortable-list" id="sortableList">
+                <li class="list-item" draggable="true">
+                    <div class="item-content">
+                        <span class="drag-handle">⋮⋮</span>
+                        <span class="item-text">タスク管理アプリの開発</span>
+                        <span class="item-number">1</span>
+                    </div>
+                </li>
+                <li class="list-item" draggable="true">
+                    <div class="item-content">
+                        <span class="drag-handle">⋮⋮</span>
+                        <span class="item-text">UIデザインの作成</span>
+                        <span class="item-number">2</span>
+                    </div>
+                </li>
+                <li class="list-item" draggable="true">
+                    <div class="item-content">
+                        <span class="drag-handle">⋮⋮</span>
+                        <span class="item-text">データベース設計</span>
+                        <span class="item-number">3</span>
+                    </div>
+                </li>
+                <li class="list-item" draggable="true">
+                    <div class="item-content">
+                        <span class="drag-handle">⋮⋮</span>
+                        <span class="item-text">APIの実装</span>
+                        <span class="item-number">4</span>
+                    </div>
+                </li>
+                <li class="list-item" draggable="true">
+                    <div class="item-content">
+                        <span class="drag-handle">⋮⋮</span>
+                        <span class="item-text">テストケースの作成</span>
+                        <span class="item-number">5</span>
+                    </div>
+                </li>
+                <li class="list-item" draggable="true">
+                    <div class="item-content">
+                        <span class="drag-handle">⋮⋮</span>
+                        <span class="item-text">デプロイ作業</span>
+                        <span class="item-number">6</span>
+                    </div>
+                </li>
+            </ul>
+
+            <div class="console-log">
+                <h3>🖥️ コンソールログ</h3>
+                <div id="logContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let draggedElement = null;
+        let draggedIndex = null;
+        const logContainer = document.getElementById('logContainer');
+
+        function addLog(message) {
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // コンソールにも出力
+            console.log(message);
+        }
+
+        function updateItemNumbers() {
+            const items = document.querySelectorAll('.list-item');
+            items.forEach((item, index) => {
+                const numberSpan = item.querySelector('.item-number');
+                numberSpan.textContent = index + 1;
+            });
+        }
+
+        function initializeDragAndDrop() {
+            const sortableList = document.getElementById('sortableList');
+            
+            // イベント委譲を使用してより確実にイベントをキャッチ
+            sortableList.addEventListener('dragstart', function(e) {
+                if (e.target.classList.contains('list-item')) {
+                    draggedElement = e.target;
+                    draggedIndex = Array.from(sortableList.children).indexOf(e.target);
+                    e.target.classList.add('dragging');
+                    
+                    const itemText = e.target.querySelector('.item-text').textContent;
+                    addLog(`🚀 ドラッグ開始: "${itemText}" (位置: ${draggedIndex + 1})`);
+                    
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/html', e.target.outerHTML);
+                }
+            });
+
+            sortableList.addEventListener('dragend', function(e) {
+                if (e.target.classList.contains('list-item')) {
+                    e.target.classList.remove('dragging');
+                    const itemText = e.target.querySelector('.item-text').textContent;
+                    addLog(`🏁 ドラッグ終了: "${itemText}"`);
+                    
+                    // すべてのdrag-overクラスを削除
+                    document.querySelectorAll('.drag-over').forEach(el => {
+                        el.classList.remove('drag-over');
+                    });
+                }
+            });
+
+            sortableList.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                
+                const targetItem = e.target.closest('.list-item');
+                if (targetItem && targetItem !== draggedElement) {
+                    // 以前のdrag-overクラスを削除
+                    document.querySelectorAll('.drag-over').forEach(el => {
+                        el.classList.remove('drag-over');
+                    });
+                    
+                    targetItem.classList.add('drag-over');
+                    
+                    const itemText = targetItem.querySelector('.item-text').textContent;
+                    addLog(`🔄 ドラッグオーバー: "${itemText}" の上を通過中`);
+                    
+                    // リアルタイムで順番を入れ替え
+                    const currentIndex = Array.from(sortableList.children).indexOf(targetItem);
+                    const draggedCurrentIndex = Array.from(sortableList.children).indexOf(draggedElement);
+                    
+                    if (draggedCurrentIndex !== currentIndex) {
+                        if (draggedCurrentIndex < currentIndex) {
+                            sortableList.insertBefore(draggedElement, targetItem.nextSibling);
+                        } else {
+                            sortableList.insertBefore(draggedElement, targetItem);
+                        }
+                        updateItemNumbers();
+                        addLog(`↔️ 位置変更: ${draggedCurrentIndex + 1}番目 → ${Array.from(sortableList.children).indexOf(draggedElement) + 1}番目`);
+                    }
+                }
+            });
+
+            sortableList.addEventListener('dragleave', function(e) {
+                const targetItem = e.target.closest('.list-item');
+                if (targetItem && targetItem !== draggedElement) {
+                    // 要素の境界チェック
+                    const rect = targetItem.getBoundingClientRect();
+                    const x = e.clientX;
+                    const y = e.clientY;
+                    
+                    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+                        targetItem.classList.remove('drag-over');
+                        const itemText = targetItem.querySelector('.item-text').textContent;
+                        addLog(`👋 ドラッグ離脱: "${itemText}" から離脱`);
+                    }
+                }
+            });
+
+            sortableList.addEventListener('drop', function(e) {
+                e.preventDefault();
+                const targetItem = e.target.closest('.list-item');
+                if (targetItem) {
+                    targetItem.classList.remove('drag-over');
+                    
+                    if (targetItem !== draggedElement && draggedElement) {
+                        const finalIndex = Array.from(sortableList.children).indexOf(draggedElement);
+                        const draggedText = draggedElement.querySelector('.item-text').textContent;
+                        
+                        addLog(`📥 ドロップ完了: "${draggedText}" が ${finalIndex + 1}番目に確定`);
+                        updateItemNumbers();
+                    }
+                }
+            });
+
+            sortableList.addEventListener('dragenter', function(e) {
+                e.preventDefault();
+                const targetItem = e.target.closest('.list-item');
+                if (targetItem && targetItem !== draggedElement) {
+                    const itemText = targetItem.querySelector('.item-text').textContent;
+                    addLog(`👆 ドラッグエンター: "${itemText}" に進入`);
+                }
+            });
+
+            addLog('🎮 ドラッグ&ドロップシステム初期化完了');
+        }
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeDragAndDrop();
+            addLog('📱 アプリケーション開始');
+        });
+
+        // ページ読み込み完了時のログ
+        window.addEventListener('load', function() {
+            addLog('🌟 すべてのリソースが読み込まれました');
+        });
+    </script>
+</body>
+</html>
