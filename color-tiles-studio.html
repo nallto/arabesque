@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Color Tiles Studio</title>
+    <style>
+        :root {
+            /* Color scheme */
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #1d2020;
+            --text-primary: #f0e8e0;
+            --text-secondary: #D8C8B5;
+            --text-muted: #999999;
+            --accent-red: #ff6b6b;
+            --accent-green: #4CAF50;
+            --shadow-light: rgba(0, 0, 0, 0.1);
+            --shadow-medium: rgba(0, 0, 0, 0.2);
+            --shadow-heavy: rgba(0, 0, 0, 0.3);
+            
+            /* Layout dimensions */
+            --color-bar-height: 100px;
+            --color-picker-width: 50px;
+            --color-picker-height: 25px;
+            --tile-width: 80px;
+            --tile-height: 40px;
+            --border-radius: 15px;
+            --border-radius-small: 12px;
+            --spacing-xs: 5px;
+            --spacing-small: 8px;
+            --spacing-medium: 15px;
+            --spacing-large: 30px;
+        }
+
+        /* Reset and base styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-ui);
+            background: var(--bg-primary);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Main container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: var(--bg-secondary);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: var(--spacing-large);
+            box-shadow: 0 8px 32px var(--shadow-light);
+        }
+
+        /* Typography */
+        h1 {
+            text-align: center;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-large);
+            font-size: 2.5rem;
+        }
+
+        /* Color picker components */
+        .color-picker {
+            width: var(--color-picker-width);
+            height: var(--color-picker-height);
+            border: 1px solid white;
+            border-radius: 0;
+            cursor: pointer;
+            outline: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            padding: 0;
+            margin: 0;
+            background: none;
+        }
+
+        .color-picker::-webkit-color-swatch-wrapper {
+            padding: 0;
+            border: none;
+            border-radius: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .color-picker::-webkit-color-swatch {
+            border: none;
+            border-radius: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .color-picker::-moz-color-swatch {
+            border: none;
+            border-radius: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .color-picker::-moz-focus-inner {
+            border: 0;
+            padding: 0;
+        }
+
+        .color-picker:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 12px var(--shadow-heavy);
+        }
+
+        .color-label {
+            font-family: var(--font-mono);
+            font-weight: bold;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            text-align: center;
+            font-size: 13px;
+            padding: 4px 8px;
+            width: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-label {
+            color: var(--text-primary);
+            font-size: 11px;
+            font-weight: bold;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Layout components */
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: var(--spacing-large);
+        }
+
+        .control-bar {
+            max-width: 1200px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 25px;
+            padding: 0 20px;
+            min-height: var(--color-bar-height);
+        }
+
+        .control-bg-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+
+        .control-tiles-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+
+        .control-actions-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--spacing-small);
+        }
+
+        .color-control {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-xs);
+            align-items: center;
+        }
+
+        .tiles-grid {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Buttons */
+        .add-row-btn {
+            padding: 12px 20px;
+            background: linear-gradient(45deg, var(--accent-red), #ee5a52);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 18px;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+            transition: all 0.3s ease;
+        }
+
+        .add-row-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6);
+        }
+
+        .action-btn {
+            color: white;
+            border: none;
+            border-radius: var(--border-radius-small);
+            padding: 0 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            position: relative;
+            font-weight: bold;
+            height: var(--tile-height);
+            width: auto;
+        }
+
+        .delete-row {
+            background: linear-gradient(45deg, rgba(255, 107, 107, 0.6), rgba(238, 90, 82, 0.6));
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+            font-size: 18px;
+            position: absolute;
+            top: -10.5px;
+            right: -10.5px;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            border-radius: 50%;
+            z-index: 10;
+        }
+
+        .delete-row:hover {
+            background: linear-gradient(45deg, rgba(255, 107, 107, 0.9), rgba(238, 90, 82, 0.9));
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6);
+        }
+
+        .restore-row {
+            background: linear-gradient(45deg, var(--accent-green), #45a049);
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+            font-size: 18px;
+        }
+
+        .restore-row:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.6);
+        }
+
+        /* Color palette components */
+        .palette-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-medium);
+        }
+
+        .color-bar {
+            position: relative;
+            height: var(--color-bar-height);
+            min-height: var(--color-bar-height);
+            max-height: var(--color-bar-height);
+            border-radius: var(--border-radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 20px;
+            box-shadow: 0 4px 15px var(--shadow-medium);
+            transition: all 0.3s ease;
+            overflow: visible;
+            cursor: grab;
+        }
+
+        .color-bar:active {
+            cursor: grabbing;
+        }
+
+        .color-bar.dragging {
+            opacity: 0.5;
+            transform: rotate(5deg);
+        }
+
+        .color-bar:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px var(--shadow-heavy);
+        }
+
+        .bar-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 25px;
+            width: 100%;
+        }
+
+        .bar-bg-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+
+        .bar-tiles-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+
+        .bar-actions-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+
+        .bar-hex {
+            color: rgba(0, 0, 0, 0.8);
+            padding: var(--spacing-xs) 10px;
+            border-radius: var(--border-radius);
+            font-family: var(--font-mono);
+            font-weight: bold;
+            font-size: 11px;
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.8);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+            width: var(--tile-width);
+            height: var(--tile-height);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .bar-hex:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+        }
+
+        .bar-label {
+            color: var(--text-primary);
+            font-size: 11px;
+            font-weight: bold;
+            text-align: center;
+            opacity: 0.8;
+        }
+
+        .tiles-container {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .color-tile {
+            width: var(--tile-width);
+            height: var(--tile-height);
+            border-radius: var(--border-radius-small);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-mono);
+            font-weight: bold;
+            font-size: 11px;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .color-tile:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Notifications */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(45deg, var(--accent-green), #45a049);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 25px;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+            z-index: 1000;
+            font-weight: bold;
+            animation: slideIn 0.3s ease;
+        }
+
+        /* Animations */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* Row labels */
+        .row-with-label {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .row-label {
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: bold;
+            text-align: left;
+            opacity: 0.9;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .container {
+                padding: var(--spacing-medium);
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .control-bar {
+                flex-direction: column;
+                height: auto;
+                min-height: auto;
+                padding: var(--spacing-medium);
+                gap: 10px;
+            }
+
+            .color-bar {
+                flex-direction: column;
+                height: auto;
+                min-height: auto;
+                max-height: none;
+                padding: var(--spacing-medium);
+                gap: 10px;
+            }
+
+            .bar-content {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .tiles-container {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Color Tiles Studio</h1>
+        
+        <div class="controls">
+            <div class="control-bar">
+                <div class="control-bg-group">
+                    <div class="color-control">
+                        <input type="color" id="bgColor" class="color-picker" value="#d0d0d0" title="Select background color">
+                        <div class="color-label" id="bgLabel">#D0D0D0</div>
+                    </div>
+                    <div class="control-label">Background</div>
+                </div>
+                
+                <div class="control-tiles-group">
+                    <div class="tiles-grid" id="tilesGrid">
+                        <!-- Tile color pickers will be generated here -->
+                    </div>
+                </div>
+                
+                <div class="control-actions-group">
+                    <button class="add-row-btn" onclick="addColorRow()">+</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="palette-container" id="paletteContainer">
+            <!-- Color rows will be added here -->
+        </div>
+    </div>
+
+    <script>
+        class ColorPaletteSite {
+            constructor() {
+                this.rowCounter = 0;
+                this.defaultTileColors = [
+                    '#e74c3c', '#f39c12', '#f1c40f', '#2ecc71', '#3498db',
+                    '#9b59b6', '#e91e63', '#795548', '#607d8b', '#34495e'
+                ];
+                this.init();
+            }
+
+            init() {
+                this.setupColorControls();
+                this.setupDragAndDrop();
+                this.addInitialRows();
+            }
+
+            setupColorControls() {
+                this.createTileColorPickers();
+                this.setupColorSync();
+            }
+
+            createTileColorPickers() {
+                const tilesGrid = document.getElementById('tilesGrid');
+                
+                this.defaultTileColors.forEach((color, index) => {
+                    const tileControl = this.createTileControl(color, index);
+                    tilesGrid.appendChild(tileControl);
+                });
+            }
+
+            createTileControl(color, index) {
+                const div = document.createElement('div');
+                div.className = 'color-control';
+                div.innerHTML = `
+                    <input type="color" class="color-picker tile-color" value="${color}" 
+                           data-index="${index}" title="Select tile color">
+                    <div class="color-label tile-label" data-index="${index}">${color.toUpperCase()}</div>
+                    <div class="control-label">Tile ${index + 1}</div>
+                `;
+                return div;
+            }
+
+            setupColorSync() {
+                // Background color sync
+                const bgColor = document.getElementById('bgColor');
+                const bgLabel = document.getElementById('bgLabel');
+                
+                bgColor.addEventListener('input', (e) => {
+                    bgLabel.textContent = e.target.value.toUpperCase();
+                });
+
+                // Tile colors sync using event delegation
+                document.addEventListener('input', (e) => {
+                    if (e.target.classList.contains('tile-color')) {
+                        const index = e.target.dataset.index;
+                        const label = document.querySelector(`.tile-label[data-index="${index}"]`);
+                        if (label) {
+                            label.textContent = e.target.value.toUpperCase();
+                        }
+                    }
+                });
+            }
+
+            addColorRow(label = null) {
+                const bgColor = document.getElementById('bgColor').value;
+                const tileColors = this.getTileColors();
+                const container = document.getElementById('paletteContainer');
+                
+                const rowDiv = this.createColorRow(bgColor, tileColors, label);
+                container.appendChild(rowDiv);
+                
+                this.animateRowEntry(rowDiv);
+                this.rowCounter++;
+            }
+
+            getTileColors() {
+                return Array.from(document.querySelectorAll('.tile-color')).map(input => input.value);
+            }
+
+            createColorRow(bgColor, tileColors, label = null) {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'color-bar';
+                rowDiv.style.backgroundColor = bgColor;
+                rowDiv.id = `row-${this.rowCounter}`;
+                rowDiv.draggable = true;
+                
+                rowDiv.innerHTML = `
+                    <div class="bar-content">
+                        <div class="bar-bg-group">
+                            <div class="bar-hex" onclick="colorPalette.copyToClipboard('${bgColor.toUpperCase()}')" 
+                                 title="Click to copy: ${bgColor.toUpperCase()}">${bgColor.toUpperCase()}</div>
+                        </div>
+                        <div class="bar-tiles-group">
+                            <div class="tiles-container">
+                                ${tileColors.map(color => `
+                                    <div class="color-tile" style="background-color: ${color}" 
+                                         onclick="colorPalette.copyToClipboard('${color.toUpperCase()}')" 
+                                         title="Click to copy: ${color.toUpperCase()}">
+                                        ${color.toUpperCase()}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div class="bar-actions-group">
+                            <button class="action-btn restore-row" onclick="colorPalette.restoreToSettings('row-${this.rowCounter}')" 
+                                    title="Restore colors to settings">↺</button>
+                        </div>
+                    </div>
+                    <button class="action-btn delete-row" onclick="colorPalette.deleteRow('row-${this.rowCounter}')" 
+                            title="Delete this row">×</button>
+                    </div>
+                `;
+                
+                // ラベルがある場合はラッパーで包む
+                if (label) {
+                    const wrapperDiv = document.createElement('div');
+                    wrapperDiv.className = 'row-with-label';
+                    wrapperDiv.innerHTML = `
+                        <div class="row-label">${label}</div>
+                    `;
+                    wrapperDiv.appendChild(rowDiv);
+                    return wrapperDiv;
+                }
+                
+                return rowDiv;
+            }
+
+            animateRowEntry(rowDiv) {
+                requestAnimationFrame(() => {
+                    rowDiv.style.opacity = '0';
+                    rowDiv.style.transform = 'translateY(-20px)';
+                    rowDiv.style.transition = 'all 0.3s ease';
+                    
+                    requestAnimationFrame(() => {
+                        rowDiv.style.opacity = '1';
+                        rowDiv.style.transform = 'translateY(0)';
+                    });
+                });
+            }
+
+            restoreToSettings(rowId) {
+                const row = document.getElementById(rowId);
+                if (!row) return;
+                
+                const barHex = row.querySelector('.bar-hex').textContent;
+                const colorTiles = row.querySelectorAll('.color-tile');
+                const tileColors = Array.from(colorTiles).map(tile => 
+                    this.rgbToHex(tile.style.backgroundColor)
+                );
+                
+                this.updateColorSettings(barHex, tileColors);
+                this.showNotification('Colors restored to settings!');
+            }
+
+            updateColorSettings(bgColor, tileColors) {
+                // Update background color
+                const bgColorPicker = document.getElementById('bgColor');
+                const bgLabel = document.getElementById('bgLabel');
+                bgColorPicker.value = bgColor;
+                bgLabel.textContent = bgColor;
+                
+                // Update tile colors
+                const tileColorPickers = document.querySelectorAll('.tile-color');
+                const tileLabels = document.querySelectorAll('.tile-label');
+                
+                tileColors.forEach((color, index) => {
+                    if (tileColorPickers[index] && tileLabels[index]) {
+                        tileColorPickers[index].value = color;
+                        tileLabels[index].textContent = color.toUpperCase();
+                    }
+                });
+            }
+
+            rgbToHex(rgb) {
+                if (rgb.startsWith('#')) return rgb;
+                
+                const result = rgb.match(/\d+/g);
+                if (!result || result.length < 3) return rgb;
+                
+                const [r, g, b] = result.map(num => parseInt(num));
+                return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+            }
+
+            deleteRow(rowId) {
+                const row = document.getElementById(rowId);
+                if (!row) return;
+                
+                row.style.transition = 'all 0.3s ease';
+                row.style.opacity = '0';
+                row.style.transform = 'translateX(-100%)';
+                
+                setTimeout(() => row.remove(), 300);
+            }
+
+            async copyToClipboard(text) {
+                try {
+                    await navigator.clipboard.writeText(text);
+                    this.showNotification(`${text} copied!`);
+                } catch (err) {
+                    console.error('Copy failed:', err);
+                    this.showNotification('Copy failed', 'error');
+                }
+            }
+
+            showNotification(message, type = 'success') {
+                const notification = document.createElement('div');
+                notification.className = 'notification';
+                notification.textContent = message;
+                
+                if (type === 'error') {
+                    notification.style.background = 'linear-gradient(45deg, #ff6b6b, #ee5a52)';
+                }
+                
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    notification.style.transform = 'translateX(100%)';
+                    setTimeout(() => notification.remove(), 300);
+                }, 2000);
+            }
+
+            setupDragAndDrop() {
+                const container = document.getElementById('paletteContainer');
+                let draggedElement = null;
+                
+                container.addEventListener('dragstart', (e) => {
+                    if (e.target.classList.contains('color-bar')) {
+                        draggedElement = e.target;
+                        e.target.classList.add('dragging');
+                        e.dataTransfer.effectAllowed = 'move';
+                    }
+                });
+                
+                container.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    
+                    if (!draggedElement) return;
+                    
+                    const afterElement = this.getDragAfterElement(container, e.clientY);
+                    const draggingElement = container.querySelector('.dragging');
+                    
+                    if (afterElement == null) {
+                        container.appendChild(draggingElement);
+                    } else {
+                        container.insertBefore(draggingElement, afterElement);
+                    }
+                });
+                
+                container.addEventListener('dragend', (e) => {
+                    if (e.target.classList.contains('color-bar')) {
+                        e.target.classList.remove('dragging');
+                        draggedElement = null;
+                    }
+                });
+            }
+
+            getDragAfterElement(container, y) {
+                const draggableElements = [...container.querySelectorAll('.color-bar:not(.dragging)')];
+                
+                return draggableElements.reduce((closest, child) => {
+                    const box = child.getBoundingClientRect();
+                    const offset = y - box.top - box.height / 2;
+                    
+                    if (offset < 0 && offset > closest.offset) {
+                        return { offset: offset, element: child };
+                    } else {
+                        return closest;
+                    }
+                }, { offset: Number.NEGATIVE_INFINITY }).element;
+            }
+
+            addInitialRows() {
+                // 1行目: ランダムな色（ラベル付き）
+                this.addRandomColorRow("Color Roulette");
+                // 2行目: 設定された色（ラベル付き）
+                setTimeout(() => this.addColorRow("Your Tiles"), 80);
+                // 3行目: 設定された色
+                setTimeout(() => this.addColorRow(), 160);
+                // 4行目: 設定された色
+                setTimeout(() => this.addColorRow(), 240);
+            }
+
+            addRandomColorRow(label = null) {
+                const randomBgColor = this.generateRandomColor();
+                const randomTileColors = Array.from({length: 10}, () => this.generateRandomColor());
+                const container = document.getElementById('paletteContainer');
+                
+                const rowDiv = this.createColorRow(randomBgColor, randomTileColors, label);
+                container.appendChild(rowDiv);
+                
+                this.animateRowEntry(rowDiv);
+                this.rowCounter++;
+            }
+
+            generateRandomColor() {
+                const letters = '0123456789ABCDEF';
+                let color = '#';
+                for (let i = 0; i < 6; i++) {
+                    color += letters[Math.floor(Math.random() * 16)];
+                }
+                return color;
+            }
+        }
+
+        // Initialize the application
+        let colorPalette;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            colorPalette = new ColorPaletteSite();
+        });
+
+        // Global functions for backward compatibility
+        function addColorRow() {
+            colorPalette.addColorRow();
+        }
+
+        function addRandomColorRow() {
+            colorPalette.addRandomColorRow();
+        }
+    </script>
+</body>
+</html>
